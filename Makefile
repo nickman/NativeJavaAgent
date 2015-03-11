@@ -2,7 +2,7 @@
 #CFLAGS=-Wall -pedantic -s -O3 -m64 
 
 #JAVA_HOME=/usr/lib/jvm/jdk1.7.0_71
-JAVA_HOME=/usr/lib/jvm/jdk1.8.0_31
+#JAVA_HOME=/usr/lib/jvm/jdk1.8.0_31
 SHELL = /bin/sh
 CC=gcc
 CPP=g++ -v
