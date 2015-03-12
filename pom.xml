@@ -25,7 +25,7 @@
 	<surefire.version>2.16</surefire.version>
 	<cobertura.version>2.5.1</cobertura.version>
 	<native-plugin.version>1.0-alpha-8</native-plugin.version>
-	<exec-plugin.version>1.2.1</exec-plugin.version>
+	<exec-plugin.version>1.3.2</exec-plugin.version>
 	<!-- Abs JVM -->
 	<jvm.home>/usr/lib/jvm/jdk1.8.0_31</jvm.home>
   </properties>
@@ -133,13 +133,14 @@
                   </goals>
                 </execution>
               </executions>
-              <configuration>
-                      <mainClass>com.heliosapm.jvmti.agent.Agent</mainClass>
+              <configuration>                      
                       <executable>java</executable>
-                      <commandlineArgs>-agentpath:./agent.so</commandlineArgs>
-                                            
+                      <workingDirectory>${basedir}</workingDirectory>
                       <arguments>
-                      	<argument>-agentpath:./agent.so</argument>                      	
+                      	<argument>-agentpath:./agent.so</argument>
+                      	<argument>-classpath</argument>
+                      	<argument>${basedir}/target/classes</argument>
+                      	<argument>com.heliosapm.jvmti.agent.Agent</argument>
                       </arguments>
               </configuration>
             </plugin>		    

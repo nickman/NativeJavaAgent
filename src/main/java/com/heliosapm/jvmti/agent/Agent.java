@@ -31,9 +31,8 @@ public class Agent {
 		System.out.println("Hello World");
 		int a = countInstances(Thread.class);
        	System.out.println("There are " + a + " instances of " + Thread.class);		
-       	Object[] objs = getAllInstances(Thread.class, 147L, 150);
-       	System.out.println("Arr Length:" + objs.length);
-       	System.out.println("Objects: " + java.util.Arrays.toString(objs));
+       	Object[] objs = getAllInstances(Thread.class, System.nanoTime(), 3);       	
+       	System.out.println(objs.length + " Objects: " + java.util.Arrays.toString(objs));
 	}
 	
 	public static native int countInstances(Class klass);
