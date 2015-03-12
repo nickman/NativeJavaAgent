@@ -15,6 +15,8 @@
  */
 package com.heliosapm.jvmti.agent;
 
+import java.lang.management.ManagementFactory;
+
 /**
  * <p>Title: Agent</p>
  * <p>Description: Native interface class to expose the native-agent's functionality</p> 
@@ -24,7 +26,17 @@ package com.heliosapm.jvmti.agent;
  */
 
 public class Agent {
+
+	public static void main(String[] args) {	
+		System.out.println("Hello World");
+		int a = countInstances(Thread.class);
+       	System.out.println("There are " + a + " instances of " + Thread.class);		
+       	Object[] objs = getAllInstances(Thread.class, 147L, 150);
+       	System.out.println("Arr Length:" + objs.length);
+       	System.out.println("Objects: " + java.util.Arrays.toString(objs));
+	}
+	
 	public static native int countInstances(Class klass);
-	public static native Object[] getAllInstances(Class klass, long tag);
+	public static native Object[] getAllInstances(Class klass, long tag, int maxInstances);
 }	
 	

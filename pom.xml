@@ -25,8 +25,9 @@
 	<surefire.version>2.16</surefire.version>
 	<cobertura.version>2.5.1</cobertura.version>
 	<native-plugin.version>1.0-alpha-8</native-plugin.version>
+	<exec-plugin.version>1.2.1</exec-plugin.version>
 	<!-- Abs JVM -->
-	<jvm.home>/usr/lib/jvm/java-1.7.0-openjdk-amd64</jvm.home>
+	<jvm.home>/usr/lib/jvm/jdk1.8.0_31</jvm.home>
   </properties>
 
 	<build>
@@ -91,35 +92,57 @@
 			<plugin>
 		        <groupId>org.codehaus.mojo</groupId>
 		        <artifactId>native-maven-plugin</artifactId>
-		        <extensions>true</extensions>
-		        <configuration>
-		        	<compilerExecutable>g++</compilerExecutable>
-		          <compilerStartOptions>
-		            <compilerStartOption>-O3 -fPIC -pthread -DLINUX -D_LP64=1</compilerStartOption>
-		          </compilerStartOptions>
-		          <sources>
-		            <source>
-		              <directory>src/main/cpp</directory>
-		              <fileNames>
-		                <fileName>native-agent.cpp</fileName>
-		              </fileNames>
-		            </source>  
-
-		            <source>
-		              <directory>${jvm.home}/include</directory>
-		            </source>            
-		            <source>
-		              <directory>${jvm.home}/include/linux</directory>
-		            </source>            
-		          </sources>
-		            
-		          <linkerStartOptions>
-		            <linkerStartOption>-shared</linkerStartOption>
-		          </linkerStartOptions>
-		                    
-		        </configuration>
+		        <version>${native-plugin.version}</version>		        
+		        <extensions>false</extensions>		        
+				        <configuration>
+				        	<compilerExecutable>g++</compilerExecutable>
+				          <compilerStartOptions>
+				            <compilerStartOption>-O3 -fPIC -pthread -DLINUX -D_LP64=1</compilerStartOption>
+				          </compilerStartOptions>
+				          <linkerOutputDirectory>${project.build.directory}</linkerOutputDirectory>
+				          <linkerFinalName>agent.so</linkerFinalName>
+				          <sources>
+				            <source>
+				              <directory>src/main/cpp</directory>
+				              <fileNames>
+				                <fileName>native-agent.cpp</fileName>
+				              </fileNames>
+				            </source>  		
+				            <source>
+				              <directory>${jvm.home}/include</directory>
+				            </source>            
+				            <source>
+				              <directory>${jvm.home}/include/linux</directory>
+				            </source>            
+				          </sources>
+				            
+				          <linkerStartOptions>
+				            <linkerStartOption>-shared</linkerStartOption>
+				          </linkerStartOptions>		                    
+				        </configuration>		        
 		        
 		    </plugin>	    
+			<plugin>
+              <groupId>org.codehaus.mojo</groupId>
+              <artifactId>exec-maven-plugin</artifactId>
+              <version>${exec-plugin.version}</version>
+              <executions>
+                <execution>
+                  <goals>
+                    <goal>exec</goal>
+                  </goals>
+                </execution>
+              </executions>
+              <configuration>
+                      <mainClass>com.heliosapm.jvmti.agent.Agent</mainClass>
+                      <executable>java</executable>
+                      <commandlineArgs>-agentpath:./agent.so</commandlineArgs>
+                                            
+                      <arguments>
+                      	<argument>-agentpath:./agent.so</argument>                      	
+                      </arguments>
+              </configuration>
+            </plugin>		    
 	  </plugins>
 
 	</build>
