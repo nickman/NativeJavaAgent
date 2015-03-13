@@ -32,6 +32,7 @@ public class Agent {
 	public static void main(String[] args) {	
 		log("Hello World");
 		int a = countInstances(Thread.class);
+<<<<<<< HEAD
 		log("There are " + a + " instances of " + Thread.class);		
        	Object[] objs = getAllInstances(Thread.class, 3);
        	log("Arr Length:" + objs.length);
@@ -103,6 +104,11 @@ public class Agent {
 	 */
 	public static Object[] getAllInstances(Class<?> klass) {
 		return getAllInstances0(klass, tagSerial.incrementAndGet(), Integer.MAX_VALUE);
+=======
+       	System.out.println("There are " + a + " instances of " + Thread.class);		
+       	Object[] objs = getAllInstances(Thread.class, System.nanoTime(), 3);       	
+       	System.out.println(objs.length + " Objects: " + java.util.Arrays.toString(objs));
+>>>>>>> 07f942289fbe76bb1b3d6b1b81cb4102bf30a037
 	}
 		
 	private static native int countInstances0(Class<?> klass);

@@ -95,17 +95,6 @@ JNICALL jint objectTaggingCallback(jlong class_tag, jlong size, jlong* tag_ptr, 
   return JVMTI_VISIT_OBJECTS;
 }
 
-extern "C"
-JNICALL jint objectTaggingCallback(jlong class_tag, jlong size, jlong* tag_ptr, jint length, void* user_data) {
-  TagContext* ctx = (TagContext*) user_data; 
-  if(ctx->tagMax!=0 && ctx->tagCount >= ctx->tagMax) {
-    cout << "Aborting Instance Tagging after " << ctx->tagCount << " Instances" << endl;
-    return JVMTI_VISIT_ABORT;
-  }
-  ctx->tagCount++;
-  *tag_ptr = *ctx->tag;
-  return JVMTI_VISIT_OBJECTS;
-}
 
 
 extern "C"
