@@ -71,7 +71,7 @@ JNICALL jint objectCountingCallback(jlong class_tag, jlong size, jlong* tag_ptr,
  
 extern "C"
 // JNIEXPORT jint JNICALL Java_org_shelajev_Main_countInstances(JNIEnv *env, jclass thisClass, jclass klass) 
-JNIEXPORT jint JNICALL Java_com_heliosapm_jvmti_agent_Agent_countInstances(JNIEnv *env, jclass thisClass, jclass klass) {
+JNIEXPORT jint JNICALL Java_com_heliosapm_jvmti_agent_Agent_countInstances0(JNIEnv *env, jclass thisClass, jclass klass) {
   int count = 0;
   jvmtiHeapCallbacks callbacks;
   (void)memset(&callbacks, 0, sizeof(callbacks));
@@ -86,33 +86,47 @@ JNIEXPORT jint JNICALL Java_com_heliosapm_jvmti_agent_Agent_countInstances(JNIEn
 extern "C"
 JNICALL jint objectTaggingCallback(jlong class_tag, jlong size, jlong* tag_ptr, jint length, void* user_data) {
   TagContext* ctx = (TagContext*) user_data; 
-  //jlong* tag = (jlong*) user_data;
+  if(ctx->tagMax!=0 && ctx->tagCount >= ctx->tagMax) {
+    cout << "Aborting Instance Tagging after " << ctx->tagCount << " Instances" << endl;
+    return JVMTI_VISIT_ABORT;
+  }
   ctx->tagCount++;
-  //cout << "Tagging. tag:" << tag << ", Size:" << size << ", tagCount:" << ctx->tagCount << endl;
   *tag_ptr = *ctx->tag;
   return JVMTI_VISIT_OBJECTS;
 }
 
 extern "C"
-JNIEXPORT jobjectArray  JNICALL Java_com_heliosapm_jvmti_agent_Agent_getAllInstances(JNIEnv *env, jclass thisClass, jclass klass, jlong tag, jint max) {
+JNICALL jint objectTaggingCallback(jlong class_tag, jlong size, jlong* tag_ptr, jint length, void* user_data) {
+  TagContext* ctx = (TagContext*) user_data; 
+  if(ctx->tagMax!=0 && ctx->tagCount >= ctx->tagMax) {
+    cout << "Aborting Instance Tagging after " << ctx->tagCount << " Instances" << endl;
+    return JVMTI_VISIT_ABORT;
+  }
+  ctx->tagCount++;
+  *tag_ptr = *ctx->tag;
+  return JVMTI_VISIT_OBJECTS;
+}
+
+
+extern "C"
+JNIEXPORT jobjectArray  JNICALL Java_com_heliosapm_jvmti_agent_Agent_getAllInstances0(JNIEnv *env, jclass thisClass, jclass klass, jlong tag, jint max) {
   jvmtiHeapCallbacks callbacks;
   (void)memset(&callbacks, 0, sizeof(callbacks));
   callbacks.heap_iteration_callback = &objectTaggingCallback;  
-  //int count = 0;
   TagContext* ctx = new TagContext();
-  ctx->tagCount = 3;
+  ctx->tagCount = 0;
   ctx->tagMax = max;
   ctx->tag = &tag;
-  cout << "Ctx [tagCount:" << ctx->tagCount << ", tagMax: " << ctx->tagMax << ", tag:" <<  ctx->tag << "]" << endl;
   jvmtiError error = gdata->jvmti->IterateThroughHeap(0, klass, &callbacks, ctx);
   jobject* objArr;
   jlong* tagArr;
   jvmtiError errorGet = gdata->jvmti->GetObjectsWithTags(1, &tag, &ctx->tagCount, &objArr, &tagArr);
-  cout << "Ctx [tagCount:" << ctx->tagCount << ", tagMax: " << ctx->tagMax << ", tag:" <<  ctx->tag << "]" << endl;
   jobjectArray ret = env->NewObjectArray(ctx->tagCount, klass, NULL);
   for (int n=0; n<ctx->tagCount; n++) {
     env->SetObjectArrayElement(ret, n, objArr[n]);
-  } 
+  }
+  gdata->jvmti->Deallocate((unsigned char*)objArr);
+  gdata->jvmti->Deallocate((unsigned char*)tagArr);
   return ret; 
 }
 

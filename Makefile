@@ -20,8 +20,8 @@ INCLUDES = -I $(JAVA_HOME)/include -I $(JAVA_HOME)/include/linux
 TARGET  = -o agent.so
 
 
-native-agent: native-agent.cpp
-	${CPP} ${CFLAGS} ${LDFLAGS} ${INCLUDES} ${TARGET} native-agent.cpp
+native-agent: ./src/main/cpp/native-agent.cpp
+	${CPP} ${CFLAGS} ${LDFLAGS} ${INCLUDES} ${TARGET}  ./src/main/cpp/native-agent.cpp
 	
 clean:
 	rm *.so
