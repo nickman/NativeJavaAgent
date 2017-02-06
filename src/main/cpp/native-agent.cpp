@@ -19,9 +19,17 @@ typedef struct {
 
  
 static GlobalAgentData *gdata;
+static bool onLoad;
+
+extern "C"
+JNIEXPORT jboolean JNICALL Java_com_heliosapm_jvmti_agent_Agent_wasLoaded0(JNIEnv *env, jclass thisClass) {
+  return onLoad;
+}
+
 
 JNIEXPORT jint JNICALL Agent_OnAttach(JavaVM* jvm, char *options, void *reserved) {
   cout << "Initializing Agent OnAttach..." << endl;
+  onLoad = false;
   jvmtiEnv *jvmti = NULL;
   jvmtiCapabilities capa;
   jvmtiError error;
@@ -49,6 +57,7 @@ JNIEXPORT jint JNICALL Agent_OnAttach(JavaVM* jvm, char *options, void *reserved
  
 JNIEXPORT jint JNICALL Agent_OnLoad(JavaVM *jvm, char *options, void *reserved) {
   cout << "Initializing Agent OnLoad..." << endl;
+  onLoad = true;
   jvmtiEnv *jvmti = NULL;
   jvmtiCapabilities capa;
   jvmtiError error;
@@ -99,21 +108,8 @@ JNICALL jvmtiIterationControl typeInstanceCountingCallback(jlong class_tag, jlon
   return JVMTI_ITERATION_CONTINUE;
 }
 
-// IterateThroughHeap(jvmtiEnv* env,
-//             jint heap_filter,
-//             jclass klass,
-//             const jvmtiHeapCallbacks* callbacks,
-//             const void* user_data)
-//             
-// GetObjectsWithTags(jvmtiEnv* env,
-//             jint tag_count,
-//             const jlong* tags,
-//             jint* count_ptr,
-//             jobject** object_result_ptr,
-//             jlong** tag_result_ptr)
  
 extern "C"
-// JNIEXPORT jint JNICALL Java_org_shelajev_Main_countInstances(JNIEnv *env, jclass thisClass, jclass klass) 
 JNIEXPORT jint JNICALL Java_com_heliosapm_jvmti_agent_Agent_countExactInstances0(JNIEnv *env, jclass thisClass, jclass klass) {
   int count = 0;
   jvmtiHeapCallbacks callbacks;
@@ -124,8 +120,6 @@ JNIEXPORT jint JNICALL Java_com_heliosapm_jvmti_agent_Agent_countExactInstances0
 }
 
 
-// private static native Object[] getAllInstances(Class klass);
-// 
 extern "C"
 JNICALL jint objectTaggingCallback(jlong class_tag, jlong size, jlong* tag_ptr, jint length, void* user_data) {
   TagContext* ctx = (TagContext*) user_data; 

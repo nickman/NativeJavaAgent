@@ -18,6 +18,7 @@
 	<!-- Plugin Versions -->
 	<compiler-plugin.version>2.3.2</compiler-plugin.version>
 	<jar-plugin.version>2.3</jar-plugin.version>
+	<antrun.version>1.8</antrun.version>
 	<source-plugin.version>2.2</source-plugin.version>
 	<javadoc-plugin.version>2.9</javadoc-plugin.version>
 	<jar-plugin.version>2.4</jar-plugin.version>
@@ -31,6 +32,15 @@
   </properties>
 
 	<build>
+		<resources>
+			<resource>
+				<directory>src/main/resources</directory>
+			</resource>
+			<resource>
+				<directory>target/native</directory>
+			</resource>
+			
+		</resources>	
 	  <plugins>
 	    <!--  Compiler Plugin -->
 	    <plugin>
@@ -81,47 +91,41 @@
                         <goals>
                             <goal>jar</goal>
                         </goals>
+                        <configuration>
+                        	<additionalparam>-Xdoclint:none</additionalparam>
+                        </configuration>                        
                     </execution>
                 </executions>
-                <configuration>
+                <configuration>                	
                     <show>public</show>
                     <nohelp>true</nohelp>
                 </configuration>
             </plugin>
-            <!-- Native Compilation Plugin -->
-			<plugin>
-		        <groupId>org.codehaus.mojo</groupId>
-		        <artifactId>native-maven-plugin</artifactId>
-		        <version>${native-plugin.version}</version>		        
-		        <extensions>false</extensions>		        
-				        <configuration>
-				        	<compilerExecutable>g++</compilerExecutable>
-				          <compilerStartOptions>
-				            <compilerStartOption>-O3 -fPIC -pthread -DLINUX -D_LP64=1</compilerStartOption>
-				          </compilerStartOptions>
-				          <linkerOutputDirectory>${project.build.directory}</linkerOutputDirectory>
-				          <linkerFinalName>agent.so</linkerFinalName>
-				          <sources>
-				            <source>
-				              <directory>src/main/cpp</directory>
-				              <fileNames>
-				                <fileName>native-agent.cpp</fileName>
-				              </fileNames>
-				            </source>  		
-				            <source>
-				              <directory>${jvm.home}/include</directory>
-				            </source>            
-				            <source>
-				              <directory>${jvm.home}/include/linux</directory>
-				            </source>            
-				          </sources>
-				            
-				          <linkerStartOptions>
-				            <linkerStartOption>-shared</linkerStartOption>
-				          </linkerStartOptions>		                    
-				        </configuration>		        
-		        
-		    </plugin>	    
+
+            <!-- Ant Plugin to call native lib make -->
+		    <plugin>
+		      <groupId>org.apache.maven.plugins</groupId>
+		      <artifactId>maven-antrun-plugin</artifactId>
+		      <version>${antrun.version}</version>
+		      <executions>
+		        <execution>
+		          <id>make</id>
+		          <phase>generate-sources</phase>
+		          <goals>
+		            <goal>run</goal>
+		          </goals>
+		          <configuration>
+		            <target name="make">
+		              <exec executable="make" failonerror="true" dir="${project.basedir}">
+		              	<arg value="all"/>
+		              </exec>
+		              
+		            </target>
+		          </configuration>
+		        </execution>
+		      </executions>
+		    </plugin>
+                
 			<plugin>
               <groupId>org.codehaus.mojo</groupId>
               <artifactId>exec-maven-plugin</artifactId>
@@ -146,6 +150,7 @@
             </plugin>		    
 	  </plugins>
 
+
 	</build>
 
 
@@ -159,6 +164,9 @@
 	      <scope>test</scope>
 	    </dependency>
 	  </dependencies>
+
+		  
+	  
 </project>
 
 

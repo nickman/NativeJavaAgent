@@ -18,10 +18,10 @@ DEBUGFLAGS   = -O0 -D _DEBUG
 RELEASEFLAGS = -O2 -D NDEBUG -combine -fwhole-program
 INCLUDES = -I $(JAVA_HOME)/include -I $(JAVA_HOME)/include/linux
 DISTDIR = ./target/native
-L64TARGET  = -o ${DISTDIR}/linux_agent_64.so
-L32TARGET  = -o ${DISTDIR}/linux_agent_32.so
-W64TARGET  = -o ${DISTDIR}/win_agent_64.dll
-W32TARGET  = -o ${DISTDIR}/win_agent_32.dll
+L64TARGET  = -o ${DISTDIR}/linux64/oif_agent.so
+L32TARGET  = -o ${DISTDIR}/linux32/oif_agent.so
+W64TARGET  = -o ${DISTDIR}/win64/oif_agent.dll
+W32TARGET  = -o ${DISTDIR}/win32/oif_agent.dll
 
 # /usr/bin/i686-w64-mingw32-c++
 # /usr/bin/x86_64-w64-mingw32-g++
@@ -29,23 +29,32 @@ W32TARGET  = -o ${DISTDIR}/win_agent_32.dll
 
 
 
-linux_native-agent-64: ./src/main/cpp/native-agent.cpp	distdir
+linux_native-agent-64: ./src/main/cpp/native-agent.cpp	distdirl64
 	${LCPP} ${C64FLAGS} ${LDFLAGS} ${INCLUDES} ${L64TARGET}  ./src/main/cpp/native-agent.cpp
 
-linux_native-agent-32: ./src/main/cpp/native-agent.cpp	distdir
+linux_native-agent-32: ./src/main/cpp/native-agent.cpp	distdirl32
 	${LCPP} ${C32FLAGS} ${LDFLAGS} ${INCLUDES} ${L32TARGET}  ./src/main/cpp/native-agent.cpp
 
 
-windows_native-agent-64: ./src/main/cpp/native-agent.cpp	distdir
+windows_native-agent-64: ./src/main/cpp/native-agent.cpp	distdirw64
 	${W64CPP} ${W64FLAGS} ${LDFLAGS} ${INCLUDES} ${W64TARGET}  ./src/main/cpp/native-agent.cpp
 
-windows_native-agent-32: ./src/main/cpp/native-agent.cpp	distdir
+windows_native-agent-32: ./src/main/cpp/native-agent.cpp	distdirw32
 	${W32CPP} ${W32FLAGS} ${LDFLAGS} ${INCLUDES} ${W32TARGET}  ./src/main/cpp/native-agent.cpp
 
 all: linux_native-agent-64 linux_native-agent-32 windows_native-agent-64 windows_native-agent-32
 
-distdir:
-	test -d ${DISTDIR} || mkdir -p ${DISTDIR}
+distdirl64:
+	test -d ${DISTDIR}/linux64 || mkdir -p ${DISTDIR}/linux64
+
+distdirl32:
+	test -d ${DISTDIR}/linux32 || mkdir -p ${DISTDIR}/linux32
+
+distdirw64:
+	test -d ${DISTDIR}/win64 || mkdir -p ${DISTDIR}/win64
+
+distdirw32:
+	test -d ${DISTDIR}/win32 || mkdir -p ${DISTDIR}/win32
 	
 clean:
 	rm -rf ./target/native
