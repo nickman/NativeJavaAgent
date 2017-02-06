@@ -32,13 +32,17 @@ W32TARGET  = -o ${DISTDIR}/win_agent_32.dll
 linux_native-agent-64: ./src/main/cpp/native-agent.cpp	distdir
 	${LCPP} ${C64FLAGS} ${LDFLAGS} ${INCLUDES} ${L64TARGET}  ./src/main/cpp/native-agent.cpp
 
+linux_native-agent-32: ./src/main/cpp/native-agent.cpp	distdir
+	${LCPP} ${C32FLAGS} ${LDFLAGS} ${INCLUDES} ${L32TARGET}  ./src/main/cpp/native-agent.cpp
+
+
 windows_native-agent-64: ./src/main/cpp/native-agent.cpp	distdir
 	${W64CPP} ${W64FLAGS} ${LDFLAGS} ${INCLUDES} ${W64TARGET}  ./src/main/cpp/native-agent.cpp
 
 windows_native-agent-32: ./src/main/cpp/native-agent.cpp	distdir
 	${W32CPP} ${W32FLAGS} ${LDFLAGS} ${INCLUDES} ${W32TARGET}  ./src/main/cpp/native-agent.cpp
 
-all: linux_native-agent-64 windows_native-agent-64 windows_native-agent-32
+all: linux_native-agent-64 linux_native-agent-32 windows_native-agent-64 windows_native-agent-32
 
 distdir:
 	test -d ${DISTDIR} || mkdir -p ${DISTDIR}

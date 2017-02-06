@@ -1,0 +1,14 @@
+
+ - Fix method names
+ - get instance filters
+ - package native libraries in jar
+ - lib installer and loader and cleaner
+ - agent installer
+ - sysprop/env overrides for native lib 
+ 
+ 
+ Needed for linux 32:
+ 	libc6-dev-i386
+ 	gcc-multilib 
+ 	g++-multilib
+  

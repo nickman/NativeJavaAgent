@@ -2,3 +2,4 @@
 /.settings/
 /.classpath
 /.project
+hs_err*.log
