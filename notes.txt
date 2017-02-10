@@ -4,7 +4,11 @@
  - package native libraries in jar
  - lib installer and loader and cleaner
  - agent installer
- - sysprop/env overrides for native lib 
+ - sysprop/env overrides for native lib
+ - counts, card for class name
+ - sorted counts
+ - topN counts
+ - Find all classes by class name 
  
  
  Needed for linux 32:
