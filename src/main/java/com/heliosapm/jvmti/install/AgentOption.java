@@ -16,9 +16,9 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
-
-import com.heliosapm.shorthand.attach.vm.VirtualMachine;
+import java.util.regex.Pattern;
 
 /**
  * <p>Title: AgentOption</p>
@@ -37,11 +37,11 @@ public enum AgentOption implements AgentOptionProcessor {
 		}
 		@Override
 		public void commandLine(final String value, final StringBuilder agentOpts, final Map<AgentOption, Object> extracted) {			
-			extracted.put(this, VirtualMachine.attach(value));
+			extracted.put(this, value);
 		}
 	},
 	/** A system property to set in the install target */
-	D(true, true, false, true, false){
+	D(true, true, false, false, false){
 		@Override
 		public void agentOpts(final String value, final Map<AgentOption, Object> extracted) {
 			final String[] sysProp = NAME_VALUE_SPLITTER.split(value);
@@ -49,7 +49,12 @@ public enum AgentOption implements AgentOptionProcessor {
 				if(sysProp[0]==null || sysProp[0].trim().isEmpty() || sysProp[1]==null || sysProp[1].trim().isEmpty()) {
 					throw new RuntimeException("Invalid system property definition: [" + value + "]");
 				}
-				System.setProperty(sysProp[0].trim(), sysProp[1].trim());
+				Properties p = (Properties) extracted.get(this);
+				if(p==null) {
+					p = new Properties();
+					extracted.put(this, p);
+				}
+				p.setProperty(sysProp[0].trim(), sysProp[1].trim());
 			} else {
 				throw new RuntimeException("Invalid system property definition: [" + value + "]");
 			}
@@ -57,18 +62,18 @@ public enum AgentOption implements AgentOptionProcessor {
 		@Override
 		public void commandLine(final String value, final StringBuilder agentOpts, final Map<AgentOption, Object> extracted) {			
 			if(agentOpts.length()!=0) {
-				agentOpts.append("##");
+				agentOpts.append(AgentInstaller.DELIM_TERM);
 			}
 			agentOpts.append(name()).append(":").append(value);			
 		}
 	};
 	
-	private AgentOption(final boolean dupsAllowed, final boolean passedToTarget, final boolean flag, final boolean madatory, final boolean madatoryOpt) {
+	private AgentOption(final boolean dupsAllowed, final boolean passedToTarget, final boolean flag, final boolean mandatoryCl, final boolean mandatoryOpt) {
 		this.dupsAllowed = dupsAllowed;
 		this.passedToTarget = passedToTarget;
 		this.flag = flag;
-		this.madatoryCl = madatory;
-		this.madatoryOpt = madatoryOpt;
+		this.mandatoryCl = mandatoryCl;
+		this.mandatoryOpt = mandatoryOpt;
 	}
 	
 	/** Indicates if this option is allowed to be supplied more than once */
@@ -78,19 +83,24 @@ public enum AgentOption implements AgentOptionProcessor {
 	/** Indicates if this command line option is a flag with no associated value */
 	public final boolean flag;
 	/** Indicates if this command line option is mandatory */
-	public final boolean madatoryCl;
+	public final boolean mandatoryCl;
 	/** Indicates if this agent option is mandatory */
-	public final boolean madatoryOpt;
+	public final boolean mandatoryOpt;
 	
 	private static final AgentOption[] values = values();
+	
+	/** The packed agent options splitter */
+	public static final Pattern PACKED_SPLITTER = Pattern.compile(AgentInstaller.DELIM_TERM);
+	/** Options that are mandatory on the command line */	
 	public static final Set<AgentOption> mandatoryCommandLine;
+	/** Options that are mandatory in the agent options */
 	public static final Set<AgentOption> mandatoryOption;
 	
 	static {
 		final Set<AgentOption> tmpCl = EnumSet.noneOf(AgentOption.class);
 		final Set<AgentOption> tmpOpt = EnumSet.noneOf(AgentOption.class);
 		for(AgentOption ao: values) {
-			if(ao.madatoryCl) tmpCl.add(ao);
+			if(ao.mandatoryCl) tmpCl.add(ao);
 		}
 		mandatoryCommandLine = Collections.unmodifiableSet(tmpCl);
 		mandatoryOption = Collections.unmodifiableSet(tmpOpt);
@@ -101,7 +111,9 @@ public enum AgentOption implements AgentOptionProcessor {
 	}
 	
 	private static Set<AgentOption> mandatoryOpt() {
-		return EnumSet.copyOf(mandatoryOption);
+		// we have none for now
+		//return EnumSet.copyOf(mandatoryOption);
+		return EnumSet.noneOf(AgentOption.class);
 	}
 	
 	
@@ -120,8 +132,47 @@ public enum AgentOption implements AgentOptionProcessor {
 		}
 	}
 	
+	/**
+	 * Handles agent option processing
+	 * @param packedAgentOptions The string passed to the agent containing the options to appy
+	 * @return A map of actionable options extracted from the packed options
+	 */
+	public static Map<AgentOption, Object> agentOptions(final String packedAgentOptions) {
+		final Set<AgentOption> mandatory = mandatoryOpt();
+		final Map<AgentOption, Object> map = new EnumMap<AgentOption, Object>(AgentOption.class);
+		if(packedAgentOptions!=null && !packedAgentOptions.trim().isEmpty()) {
+			final String[] options = PACKED_SPLITTER.split(packedAgentOptions);
+			for(String option: options) {
+				final int index = option.indexOf(':');
+				if(index==-1) throw new IllegalArgumentException("Invalid unpacked agent option [" + option + "]");
+				final String agentOption = option.substring(0, index);
+				final AgentOption ao = decode(agentOption);
+				final String optionValue;
+				if(ao.flag) {
+					optionValue = null;
+				} else {
+					optionValue = option.substring(index+1);
+					if(optionValue.isEmpty()) throw new IllegalArgumentException("Empty unpacked agent option value [" + option + "]");
+				}
+				ao.agentOpts(optionValue, map);
+				mandatory.remove(ao);
+			}
+		}
+		if(!mandatory.isEmpty()) {
+			throw new RuntimeException("Missing mandatory agent option[s]:" + mandatory);
+		}
+		
+		return map;
+	}
 	
-	public static Map<AgentOption, Object> commandLine(final String[] commandLine, final StringBuilder allAgentOptions) {
+	/**
+	 * Handles command line processing
+	 * @param allAgentOptions A buffer that collects all command line options intended to
+	 * be relayed to a jmv installation as agent options
+	 * @param commandLine The command line options to parse
+	 * @return A map of actionable options extracted from the command line
+	 */
+	public static Map<AgentOption, Object> commandLine(final StringBuilder allAgentOptions, final String...commandLine) {
 		final Set<AgentOption> mandatory = mandatoryCl();
 		final int maxIndex = commandLine.length-1;
 		final Map<AgentOption, Object> map = new EnumMap<AgentOption, Object>(AgentOption.class);
@@ -132,7 +183,10 @@ public enum AgentOption implements AgentOptionProcessor {
 				final AgentOption ao;
 				String v = commandLine[i].substring(2);
 				final int index = v.indexOf('=');
-				if(index!=-1) {
+				if(index==-1) {
+					//=============================================
+					// option is flag, or value is next arg
+					//=============================================
 					agentOption = v;
 					ao = decode(agentOption);
 					if(!ao.flag) {
@@ -145,9 +199,15 @@ public enum AgentOption implements AgentOptionProcessor {
 						optionValue = null;
 					}
 				} else {
+					//=============================================
+					// option is in form OPT=VAL
+					//=============================================					
 					agentOption = v.substring(0, index);
 					ao = decode(agentOption);
 					optionValue = v.substring(index+1);
+					if(optionValue.isEmpty()) {
+						throw new RuntimeException("Empty value for option [" + ao.name() + "]");
+					}					
 				}
 				ao.commandLine(optionValue, allAgentOptions, map);
 				mandatory.remove(ao);
