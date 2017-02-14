@@ -12,6 +12,8 @@
 // see <http://www.gnu.org/licenses/>.
 package com.heliosapm.jvmti.agent;
 
+import java.util.LinkedHashMap;
+
 /**
  * <p>Title: AgentMBean</p>
  * <p>Description: JMX MBean interface for {@link Agent}</p> 
@@ -23,5 +25,44 @@ package com.heliosapm.jvmti.agent;
 public interface AgentMBean {
 	/** The JMX ObjectName */
 	public static final String OBJECT_NAME = "com.heliosapm.jvmti:service=Agent";
+	
+	/**
+	 * Returns the number of instances of the passed class 
+	 * or any that implement or inherrit from it 
+	 * @param className The name of the class to count instances for
+	 * @return the number of instances found
+	 */
+	public int getInstanceCountOfAny(final String className);
+
+	/**
+	 * Returns the number of instances of the exact passed class 
+	 * @param className The name of the class to count instances for
+	 * @return the number of instances found
+	 */
+	public int getInstanceCountOf(final String className);
+	
+	
+	/**
+	 * Returns the top <code>N</code> classes by count
+	 * @param className The name of the class to count instances for
+	 * @param n The top n value
+	 * @param excludePrims exclude primitives and arrays of primitives
+	 * @return A map of the number of class instances keyed by the class name
+	 */
+	public LinkedHashMap<String, Long> getTopNInstanceCounts(final String className, final int n, final boolean excludePrims);
+	
+	
+	/**
+	 * Indicates if the agent was loaded at boot time or was attached
+	 * @return true if loaded, false if attached
+	 */
+	public boolean isAgentBootLoaded();
+	
+	/**
+	 * Returns the location where the native library was loaded from
+	 * @return the library file name 
+	 */
+	public String getNativeLibrary();
+	
 	
 }

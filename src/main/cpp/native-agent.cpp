@@ -22,7 +22,7 @@ static GlobalAgentData *gdata;
 static bool onLoad;
 
 extern "C"
-JNIEXPORT jboolean JNICALL Java_com_heliosapm_jvmti_agent_Agent_wasLoaded0(JNIEnv *env, jclass thisClass) {
+JNIEXPORT jboolean JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_wasLoaded0(JNIEnv *env, jclass thisClass) {
   return onLoad;
 }
 
@@ -110,7 +110,7 @@ JNICALL jvmtiIterationControl typeInstanceCountingCallback(jlong class_tag, jlon
 
  
 extern "C"
-JNIEXPORT jint JNICALL Java_com_heliosapm_jvmti_agent_Agent_countExactInstances0(JNIEnv *env, jclass thisClass, jclass klass) {
+JNIEXPORT jint JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_countExactInstances0(JNIEnv *env, jclass thisClass, jclass klass) {
   int count = 0;
   jvmtiHeapCallbacks callbacks;
   (void)memset(&callbacks, 0, sizeof(callbacks));
@@ -135,7 +135,7 @@ JNICALL jint objectTaggingCallback(jlong class_tag, jlong size, jlong* tag_ptr, 
 
 
 extern "C"
-JNIEXPORT jobjectArray  JNICALL Java_com_heliosapm_jvmti_agent_Agent_getExactInstances0(JNIEnv *env, jclass thisClass, jclass klass, jlong tag, jint max) {
+JNIEXPORT jobjectArray  JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_getExactInstances0(JNIEnv *env, jclass thisClass, jclass klass, jlong tag, jint max) {
   jvmtiHeapCallbacks callbacks;
   (void)memset(&callbacks, 0, sizeof(callbacks));
   callbacks.heap_iteration_callback = &objectTaggingCallback;  
@@ -158,7 +158,7 @@ JNIEXPORT jobjectArray  JNICALL Java_com_heliosapm_jvmti_agent_Agent_getExactIns
 
 
 extern "C"
-JNIEXPORT int  JNICALL Java_com_heliosapm_jvmti_agent_Agent_countInstances0(JNIEnv* env, jclass ignored, jclass targetClass, jlong tg, jint max) {
+JNIEXPORT int  JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_countInstances0(JNIEnv* env, jclass ignored, jclass targetClass, jlong tg, jint max) {
 
     TagContext* ctx = new TagContext();
     ctx->tagCount = 0;
@@ -177,7 +177,7 @@ JNIEXPORT int  JNICALL Java_com_heliosapm_jvmti_agent_Agent_countInstances0(JNIE
 
 
 extern "C"
-JNIEXPORT jobjectArray  JNICALL Java_com_heliosapm_jvmti_agent_Agent_getInstances0(JNIEnv* env, jclass ignored, jclass targetClass, jlong tg, jint max) {
+JNIEXPORT jobjectArray  JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_getInstances0(JNIEnv* env, jclass ignored, jclass targetClass, jlong tg, jint max) {
     TagContext* ctx = new TagContext();
     ctx->tagCount = 0;
     ctx->tagMax = max;

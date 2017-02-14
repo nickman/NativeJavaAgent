@@ -12,9 +12,12 @@
 // see <http://www.gnu.org/licenses/>.
 package com.heliosapm.jvmti.install;
 
+import java.io.File;
+import java.net.URL;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -29,6 +32,41 @@ import java.util.regex.Pattern;
  */
 
 public enum AgentOption implements AgentOptionProcessor {
+	/** Additional classpath entry for agent */
+	CP(true, true, false, false, false) {
+		@Override
+		public void agentOpts(String value, Map<AgentOption, Object> extracted) {
+			URL url;
+			try {
+				url = new URL(value);
+				final File f = new File(url.getFile());
+				if(!f.exists()) throw new IllegalArgumentException("Invalid classpath URL (file): [" + f + "]");
+				url = f.getAbsoluteFile().toURI().toURL();
+			} catch (Exception ex) {
+				throw new IllegalArgumentException("Invalid classpath URL: [" + value + "]", ex);
+			}
+			@SuppressWarnings("unchecked")
+			Set<URL> urls = (Set<URL>)extracted.get(this);
+			if(urls==null) {
+				urls = new LinkedHashSet<URL>();
+				extracted.put(this, urls);
+			}
+			urls.add(url);			
+		}
+		@Override
+		public void commandLine(final String value, final StringBuilder agentOpts, final Map<AgentOption, Object> extracted) {
+			final URL url;
+			try {
+				url = new URL(value);
+			} catch (Exception ex) {
+				throw new IllegalArgumentException("Invalid classpath URL: [" + value + "]", ex);
+			}
+			if(agentOpts.length()!=0) {
+				agentOpts.append(AgentInstaller.DELIM_TERM);
+			}
+			agentOpts.append(name()).append(":").append(url.toString());			
+		}
+	},
 	/** The process ID of the JVM to install to */
 	PID(false, false, false, true, false){
 		@Override
@@ -36,7 +74,8 @@ public enum AgentOption implements AgentOptionProcessor {
 			/* No Op */
 		}
 		@Override
-		public void commandLine(final String value, final StringBuilder agentOpts, final Map<AgentOption, Object> extracted) {			
+		public void commandLine(final String value, final StringBuilder agentOpts, final Map<AgentOption, Object> extracted) {
+			if(extracted.containsKey(this)) throw new IllegalArgumentException("Multiple PID arguments");
 			extracted.put(this, value);
 		}
 	},

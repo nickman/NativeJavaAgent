@@ -15,27 +15,22 @@
  */
 package com.heliosapm.jvmti.agent;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.lang.management.ManagementFactory;
-import java.lang.reflect.Field;
+import java.lang.reflect.Array;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+
+import javax.management.ObjectName;
 
 import com.heliosapm.jvmti.util.SystemClock;
 import com.heliosapm.jvmti.util.SystemClock.ElapsedTime;
-import com.heliosapm.shorthand.attach.vm.VirtualMachine;
 
 
 /**
@@ -46,35 +41,19 @@ import com.heliosapm.shorthand.attach.vm.VirtualMachine;
  * <p><code>com.heliosapm.jvmti.agent.Agent</code></p>
  */
 
-public class Agent {
+public class Agent implements AgentMBean {
 	/** The singleton instance */
 	private static volatile Agent instance = null;
 	/** The singleton instance ctor lock */
 	private static Object lock = new Object();
-	/** Indicates if the native library is loaded */
-	private static final AtomicBoolean nativeLoaded = new AtomicBoolean(false);
-	/** The command line agent load prefixed */
-	public static final Set<String> AGENT_CL_PREFIX = 
-			Collections.unmodifiableSet(new HashSet<String>(Arrays.asList("-agentpath:", "-agentlib:", "-javaagent:")));
-	/** The agent native lib name */
-	public static final String LIB_NAME = "oif_agent";
-	/** The system property override defining the absolute location of the oif agent library to load */
-	public static final String CONFIG_AGENT_LOCATION = "com.heliosapm.jvmti.lib";
-	/** The system property override to suppress the deleteOnExit on the jar extracted lib. Just set, no value needed. */
-	public static final String CONFIG_AGENT_NO_DEL_LIB = "com.heliosapm.jvmti.lib.nodelonexit";
+	/** Signature for an array */
+	public static final String ARRAY_IND = "[]";
+	/** Empty int[] arr placeholder */
+	public static int[] INT_ARR_PLACEHOLDER = {};
 	
-	/** The directory prefix when loading the default lib in dev mode */
-	public static final String DEV_DIR_PREFIX = "target/native/";
-	/** This JVM's process id */
-	public static final String PID = ManagementFactory.getRuntimeMXBean().getName().split("@")[0];
-	/** The tag serial */
-	private final AtomicLong tagSerial = new AtomicLong(0L);
+	private final NativeAgent nativeAgent;
 	
-	/** Integer sorter */
-	@SuppressWarnings("unchecked")
-	public final Comparator<Integer> INT_COMP_ASC = (Comparator<Integer>) new TreeSet<Integer>().comparator();
-	/** Integer descending sorter */
-	public final Comparator<Integer> INT_COMP_DESC = Collections.reverseOrder(INT_COMP_ASC);
+	
 	/**
 	 * Acquires the singleton agent instance
 	 * @return the agent
@@ -83,94 +62,144 @@ public class Agent {
 		if(instance==null) {
 			synchronized(lock) {
 				if(instance==null) {
-					instance = new Agent(true);
+					instance = new Agent();
 				}
 			}
 		}
 		return instance;
 	}
 	
-	private Agent(final boolean loadNative) {
-		if(loadNative) {
-			loadNative();
+	/** The system property key to override the default JMX ObjectName for the agent */
+	public static final String AGENT_OBJECT_NAME_PROP = "com.heliosapm.jvmti.agent.objectname";
+	/** The default JMX ObjectName for the agent */
+	public static final String DEFAULT_AGENT_OBJECT_NAME = "com.heliosapm.jvmti:service=Agent";
+	
+	private Agent() {
+		nativeAgent = NativeAgent.getInstance();
+		ObjectName objectName = null;
+		try {
+			objectName = new ObjectName(System.getProperty(AGENT_OBJECT_NAME_PROP, DEFAULT_AGENT_OBJECT_NAME));
+		} catch (Exception ex) {
+			System.err.println("Failed to build object name from configured ObjectName [" + System.getProperty(AGENT_OBJECT_NAME_PROP) + "]. Reverting to default.");
+			try {
+				objectName = new ObjectName(DEFAULT_AGENT_OBJECT_NAME);
+			} catch (Exception x) {/* No Op */}
+		}
+		try {
+			ManagementFactory.getPlatformMBeanServer().registerMBean(this, objectName);
+		} catch (Exception ex) {
+			System.err.println("Failed to register Agent management interface:" + ex);
 		}
 	}
+	
+	
 	
 	public static void main(String[] args) {
 		log("Hello World");
-		final Agent agent = new Agent(true);
-		log("Was Loaded:" + agent.wasLoaded());
-		int csCount = countInstances0(CharSequence.class, agent.tagSerial.incrementAndGet(), Integer.MAX_VALUE);
-		log("There are " + csCount + " CharSequence instances");
-		int a = agent.countExactInstances(Thread.class);
-		log("There are " + a + " instances of " + Thread.class);		
-       	Object[] objs = agent.getInstancesOf(Thread.class);
-       	log("Arr Length:" + objs.length);
-       	log("Threads: " + java.util.Arrays.toString(objs));
-       	objs = agent.getInstancesOf(ThreadPoolExecutor.class, 3);
-       	log("Arr Length:" + objs.length);
-       	log("TPEs: " + java.util.Arrays.toString(objs));
-       	objs = agent.getInstancesOf(System.out.getClass(), 300);
-       	log("Arr Length:" + objs.length);
-       	log("PrintStreams: " + java.util.Arrays.toString(objs));
-       	objs = agent.getInstancesOf(String.class, 300);
-       	log("Arr Length:" + objs.length);
-       	log("Strings: " + java.util.Arrays.toString(objs));
-       	objs = agent.getInstancesOf(String[].class, 300);
-       	log("Arr Length:" + objs.length);
-       	log("String Arrays: " + java.util.Arrays.deepToString(objs));
-       	log("int instance count: %s", agent.countExactInstances(byte[].class));
-       	
-       	log("==== Types of charsequence");
-       	for(Class<?> clazz: agent.getAllTypesOf(CharSequence.class)) {
-       		log("\t%s", clazz.getName());
-       	}
-       	
-       	final int loops = 20000;
-       	final ElapsedTime et = SystemClock.startClock();
-       	int max = 0;
-       	int min = Integer.MAX_VALUE;
-       	int maxLoop = -1;
-       	int minLoop = -1;
-       	for(int i = 0; i < loops; i++) {
-       		Object[] all = agent.getInstancesOfAny(Object.class);
-       		final int count = all.length;
-       		if(count > max) {
-       			max = count;
-       			maxLoop = i;
-       		}
-       		if(count < min) {
-       			min = count;
-       			minLoop = i;
-       		}
-       		all = null;
-       		if(i%1000==0) System.gc();
-       	}
-       	log(et.printAvg("AllObjects Lookup", loops));
-       	log("Max: %s at loop %s, Min: %s at loop %s", max, maxLoop, min, minLoop);
+		final Agent agent = Agent.getInstance();
+//		final Object[] foos = new Object[100];
+//		final Object[] bars = new Object[100];
+//		for(int i = 0; i < 100; i++) {
+//			foos[i] = new Foo();
+//			bars[i] = new Bar();
+//		}
+//		log("Was Loaded:" + agent.wasLoaded());
+//		int csCount = agent.getInstanceCount(CharSequence.class);
+//		log("There are " + csCount + " CharSequence instances");
+//		int a = agent.getInstanceCount(Thread.class);
+//		log("There are " + a + " instances of " + Thread.class);		
+//       	Object[] objs = agent.getInstancesOf(Thread.class);
+//       	log("Arr Length:" + objs.length);
+//       	log("Threads: " + java.util.Arrays.toString(objs));
+//       	objs = agent.getInstancesOf(ThreadPoolExecutor.class, 3);
+//       	log("Arr Length:" + objs.length);
+//       	log("TPEs: " + java.util.Arrays.toString(objs));
+//       	objs = agent.getInstancesOf(System.out.getClass(), 300);
+//       	log("Arr Length:" + objs.length);
+//       	log("PrintStreams: " + java.util.Arrays.toString(objs));
+//       	objs = agent.getInstancesOf(String.class, 300);
+//       	log("Arr Length:" + objs.length);
+//       	log("Strings: " + java.util.Arrays.toString(objs));
+//       	objs = agent.getInstancesOf(String[].class, 300);
+//       	log("Arr Length:" + objs.length);
+//       	log("String Arrays: " + java.util.Arrays.deepToString(objs));
+//       	log("int instance count: %s", agent.getExactInstanceCount(byte[].class));
+//       	
+//       	log("==== Types of charsequence");
+//       	for(Class<?> clazz: agent.getAllTypesOf(CharSequence.class)) {
+//       		log("\t%s", clazz.getName());
+//       	}
+//       	
+//       	final int loops = 20000;
+//       	final ElapsedTime et = SystemClock.startClock();
+//       	int max = 0;
+//       	int min = Integer.MAX_VALUE;
+//       	int maxLoop = -1;
+//       	int minLoop = -1;
+//       	for(int i = 0; i < loops; i++) {
+//       		Object[] all = agent.getInstancesOfAny(Object.class);
+//       		final int count = all.length;
+//       		if(count > max) {
+//       			max = count;
+//       			maxLoop = i;
+//       		}
+//       		if(count < min) {
+//       			min = count;
+//       			minLoop = i;
+//       		}
+//       		all = null;
+//       		if(i%1000==0) System.gc();
+//       	}
+//       	log(et.printAvg("AllObjects Lookup", loops));
+//       	log("Max: %s at loop %s, Min: %s at loop %s", max, maxLoop, min, minLoop);
        	
        	//agent.printClassCardinality(Object.class);
+		
+		final int TOPN = 100;		
+		log("Loaded:" + agent.isAgentBootLoaded());
+		int cnt = 0;
+		for(int i = 0; i < 100; i++) {
+			cnt += agent.getTopNInstanceCounts("java.lang.Object", TOPN, true).size();
+			System.gc();
+			cnt += agent.getTopNInstanceCounts(Object.class, TOPN, true).size();
+			System.gc();
+		}
+		log("Cnt:" + cnt);
+		
+		System.gc();
+		
+		log("Total Objects Before:" + agent.getInstanceCountOfAny(Object.class));
+		
+		System.gc();
+		
+		final ElapsedTime et2 = SystemClock.startClock();
+		final Map<Class<Object>, Long> map2 = agent.getTopNInstanceCounts(Object.class, TOPN, false);
+		final long elapsed2 = et2.elapsed();
+		final long count2 = map2.values().parallelStream().mapToLong(l -> l.longValue()).sum();
+		log(ElapsedTime.printAvg("Examined Objects By Class", count2, elapsed2, TimeUnit.NANOSECONDS));
+		
+		System.gc();
+
+		final ElapsedTime et = SystemClock.startClock();
+		final Map<String, Long> map = agent.getTopNInstanceCounts("java.lang.Object", TOPN, false);
+		final long elapsed = et.elapsed();
+		final long count = map.values().parallelStream().mapToLong(l -> l.longValue()).sum();
+		log(ElapsedTime.printAvg("Examined Objects By ClassName", count, elapsed, TimeUnit.NANOSECONDS));
+
+		
+//		log("\n\t==========================\n\tTop %s\n\t==========================", TOPN);
+//		for(Map.Entry<String, Long> entry: map.entrySet()) {
+//			log("%s  :  %s", entry.getKey(), entry.getValue());
+//		}
+//		log("\n\t==========================");
+//		log("Size:" + map.size());
+//		SystemClock.sleep(999999999);
+//		int objArrayCount = agent.getExactInstanceCount("java.lang.Object[]");
+//		log("Object[] count: %s", objArrayCount);
 	}
 	
 	
 	
-	public Map<Class<?>, Integer> classCardinality(final Object...instances) {
-		final Map<Class<?>, int[]> aggr = new HashMap<Class<?>, int[]>(512);
-		for(Object obj: instances) {
-			final Class<?> clazz = obj.getClass();
-			int[] cnt = aggr.get(clazz);
-			if(cnt==null) {
-				cnt = new int[]{1};
-				aggr.put(clazz, cnt);				
-			}
-			cnt[0]++;
-		}
-		final Map<Class<?>, Integer> total = new HashMap<Class<?>, Integer>(aggr.size());
-		for(Map.Entry<Class<?>, int[]> entry: aggr.entrySet()) {
-			total.put(entry.getKey(), entry.getValue()[0]);
-		}
-		return total;
-	}
 	
 	public static void log(Object fmt, Object...args) {
 		System.out.println(String.format(fmt.toString(), args));
@@ -182,182 +211,139 @@ public class Agent {
 	 * @return a set of classes
 	 */
 	public Set<Class<?>> getAllTypesOf(final Class<?> type) {
-		final Set<Class<?>> types = new HashSet<Class<?>>();
-		for(Object obj: getInstancesOfAny(type)) {
-			types.add(obj.getClass());
-		}
-		return types;
+		return Arrays.stream(getInstancesOfAny(type))
+		.parallel()
+		.map(o -> o.getClass())
+		.collect(Collectors.toCollection(HashSet<Class<?>>::new));
 	}
 	
 	/**
-	 * Determines the os and cpu arch from system properties and returns the 
-	 * directory and library file name
-	 * @return the directory and library file name for this platform
+	 * Returns all type names equal to or inherrited from the passed type 
+	 * for which there are instances in the heap
+	 * @param type The type to retrieve
+	 * @return a set of class names
 	 */
-	public String libDir() {
-		final String os = System.getProperty("os.name").toLowerCase();
-		final String arch = System.getProperty("sun.arch.data.model");
-		if(os.contains("linux")) {
-			if(arch.equals("64")) {
-				return "linux64/liboifagent.so";
-			} else if(arch.equals("32")) {
-				return "linux32/liboifagent.so";
-			} else {
-				throw new RuntimeException("Linux arch Not Supported: [" + arch + "]");
-			}
-		} else if(os.contains("windows")) {
-			if(arch.equals("64")) {
-				return "win64/oifagent.dll";
-			} else if(arch.equals("32")) {
-				return "win32/oifagent.dll";
-			} else {
-				throw new RuntimeException("Windows arch Not Supported: [" + arch + "]");
-			}			
-		} else {
-			throw new RuntimeException("OS Not Supported: [" + os + "]");
-		}
-		
-	}
-	
-	/**
-	 * Determines if the agent was loaded on the command line
-	 * @return true if loaded on command line, false otherwise
-	 */
-	public boolean wasLoadedCl() {
-		final List<String> clArgs = ManagementFactory.getRuntimeMXBean().getInputArguments();
-		for(final String arg: clArgs) {
-			for(final String prefix: AGENT_CL_PREFIX) {
-				if(arg.startsWith(prefix)) {
-					if(arg.contains(LIB_NAME)) {
-						nativeLoaded.set(true);
-						return true;
-					}
-				}
-			}
-		}
-		return false;
+	public Set<String> getAllTypeNamesOf(final Class<?> type) {
+		return Arrays.stream(getInstancesOfAny(type))
+		.parallel()
+		.map(o -> renderClassName(o.getClass()))
+		.collect(Collectors.toCollection(HashSet<String>::new));
 	}
 	
 	
 	/**
-	 * Attempts to load the oif agent if it is determined it is not already loaded
-	 * @return true if the agent is loaded, false otherwise (which means it failed to load)
+	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#getNativeLibrary()
 	 */
-	public boolean loadNative() {
-		if(wasLoadedCl()) return true;
-		if(nativeLoaded.compareAndSet(false, true)) {
-			VirtualMachine vm = null;
-			try {
-				// Check for sysprop override
-				final String libToLoad;
-				if(System.getProperties().containsKey(CONFIG_AGENT_LOCATION)) {
-					libToLoad = System.getProperties().getProperty(CONFIG_AGENT_LOCATION);									
-				} else {
-					// determine if we're running in a jar (true) or dev mode (false)
-					final boolean isJar = Agent.class.getProtectionDomain().getCodeSource().getLocation().toString().endsWith(".jar");					
-					if(isJar) {
-						libToLoad = unloadLibFromJar().getAbsolutePath();
-					} else {
-						libToLoad = "./target/native/" + libDir();
-					}
-				}
-				loadLibFromFile(libToLoad);
-			} catch (Throwable t) {
-				nativeLoaded.set(false);	
-				t.printStackTrace(System.err);
-			} finally {
-				if(vm!=null) try { vm.detach(); } catch (Exception x) {/* No Op */}
-			}
-		}
-		return nativeLoaded.get();
+	@Override
+	public String getNativeLibrary() {		
+		return nativeAgent.getNativeLibrary();
 	}
 	
 	/**
-	 * Acquires a VirtualMachine instance, executes the passed task, and dettaches
-	 * @param task The task to run against the VirtualMachine
-	 * @return the return value of the task
-	 * @throws Exception the exception thrown from the task
+	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#isAgentBootLoaded()
 	 */
-	public <T> T runInVirtualMachine(final VirtualMachineTask<T> task) throws Exception {
-		VirtualMachine vm = null;
-		try {
-			vm = VirtualMachine.attach(PID);
-			task.setVirtualMachine(vm);
-			return task.call();
-		} catch (Throwable t) {
-			if(Exception.class.isInstance(t)) throw (Exception)t;
-			throw new RuntimeException(t);
-		} finally {
-			if(vm!=null) try { vm.detach(); } catch (Exception x) {/* No Op */}
+	@Override
+	public boolean isAgentBootLoaded() {		
+		return nativeAgent.isAgentLoadedAtBoot();
+	}
+
+	/** Predicate to filter out primtive types and arrays of primitive types */
+	public final Predicate<Class<?>> noPrimitiveClassFilter = new Predicate<Class<?>>() {
+		@Override
+		public boolean test(final Class<?> fklazz) {				
+			return !(fklazz.isPrimitive() || (fklazz.isArray() && getComponentClass(fklazz).isPrimitive()));
 		}
+	};
+	/** No Op Predicate class filter */
+	public final Predicate<Class<?>> noOpClassFilter = new Predicate<Class<?>>() {
+		@Override
+		public boolean test(final Class<?> fklazz) {			
+			return true;
+		}
+	}; 
+	
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#getTopNInstanceCounts(java.lang.String, int, boolean)
+	 */
+	@Override
+	public LinkedHashMap<String, Long> getTopNInstanceCounts(final String className, final int n, final boolean excludePrims) {
+		if(className==null || className.trim().isEmpty()) throw new IllegalArgumentException("The passed class name was null or empty");
+		if(n<1) throw new IllegalArgumentException("Invalid max instances:" + n);
+		final LinkedHashMap<String, Long> topMap = new LinkedHashMap<String, Long>(n > 8192 ? 8192 : n);
+		resolveClass(className)
+			.parallelStream()			
+			.map(c -> getInstancesOfAny(c))
+			.flatMap(arr -> { 
+				return Arrays.stream(arr)
+					.parallel()					
+					.map(Object::getClass)
+					.filter(excludePrims ? noPrimitiveClassFilter : noOpClassFilter)
+					.map(k -> renderClassName(k));				
+			})
+			.collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
+			.entrySet().stream().sorted(EntryComparators.DESC_ENTRY_STR_LONG_COMP)
+			.limit(n)
+			.forEachOrdered(e -> topMap.put(e.getKey(), e.getValue()));
+		return topMap;
 	}
 	
 	/**
-	 * Unloads the platform library from the native agent jar and writes it to a temp file
-	 * @return the temp file the library was written to
-	 * @throws Exception thrown on any error
+	 * Returns the top <code>N</code> classes by count
+	 * @param clazz The class to count instances for
+	 * @param n The top n value
+	 * @param excludePrims exclude primitives and arrays of primitives
+	 * @return A map of the number of class instances keyed by the class
 	 */
-	private File unloadLibFromJar() throws Exception {
-		final ClassLoader cl = Agent.class.getClassLoader();
-		final String resourceName = libDir();
-		final String libFileName = resourceName.split("/")[1];
-		final InputStream is = cl.getResourceAsStream(resourceName);
-		if(is==null) throw new Exception("Failed to find resource [" + resourceName + "]");
-		FileOutputStream fos = null;
-		final byte[] transferBuffer = new byte[8192];
-		int bytesRead = -1;
-		try {
-			final File libFile = File.createTempFile(LIB_NAME, libFileName);
-			fos = new FileOutputStream(libFile);
-			while((bytesRead = is.read(transferBuffer))!=-1) {
-				fos.write(transferBuffer, 0, bytesRead);
-			}
-			fos.flush();
-			fos.close();
-			if(!System.getProperties().containsKey(CONFIG_AGENT_NO_DEL_LIB)) {
-				libFile.deleteOnExit();
-			}
-			
-			return libFile;
-		} finally {
-			if(is!=null) try { is.close(); } catch (Exception x) {/* No Op */}
-			if(fos!=null) try { fos.close(); } catch (Exception x) {/* No Op */}
-			
-		}
+	@SuppressWarnings("unchecked")
+	public <T> LinkedHashMap<Class<T>, Long> getTopNInstanceCounts(final Class<T> clazz, final int n, final boolean excludePrims) {
+		if(clazz==null) throw new IllegalArgumentException("The passed class was null");
+		if(n<1) throw new IllegalArgumentException("Invalid max instances:" + n);
+		final LinkedHashMap<Class<T>, Long> topMap = new LinkedHashMap<Class<T>, Long>(n > 8192 ? 8192 : n);
+		Arrays.stream(getInstancesOfAny(clazz))
+			.parallel()					
+			.map(Object::getClass)
+			.filter(excludePrims ? noPrimitiveClassFilter : noOpClassFilter)
+			.collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
+			.entrySet().stream().sorted(EntryComparators.DESC_ENTRY_LONG_COMP)
+			.limit(n)
+			.forEachOrdered(e -> topMap.put((Class<T>) e.getKey(), e.getValue()));
+		return topMap;
+	}
+	
+	
+	/**
+	 * Finds the component class for an array type
+	 * @param clazz The array type
+	 * @return the base component class for the passed type
+	 */
+	public Class<?> getComponentClass(final Class<?> arrayType) {
+		return getComponentClass(arrayType, null);
 	}
 	
 	/**
-	 * Loads the native library from the passed file
-	 * @param fileName The name of the agent lib file to load 
+	 * Finds the component class for an array type 
+	 * and puts the dimension of the type in the passed array at index 0
+	 * @param arrayType The array type
+	 * @param dimension The optional array that the type's array dimension is put into.
+	 * Ignored if null or zero length.
+	 * @return the base component class for the passed type
 	 */
-	public void loadLibFromFile(final String fileName) {
-		final File absFile = new File(new File(fileName).getAbsolutePath());
-		if(!absFile.exists()) {
-			throw new RuntimeException("Failed to find lib file [" + absFile + "]");			
+	public Class<?> getComponentClass(final Class<?> arrayType, final int[] dimension) {
+		if(arrayType==null) throw new IllegalArgumentException("The passed class was null");		
+		if(!arrayType.isArray()) return arrayType;
+		final boolean dimTrack = dimension!=null && dimension.length > 0;
+		int dim = 0;
+		Class<?> current = arrayType;
+		while(current.isArray()) { 
+			current = current.getComponentType();
+			dim++;
 		}
-		try {
-			runInVirtualMachine(new AbstractVirtualMachineTask<Void>(){
-				@Override
-				public Void call() throws Exception {
-					vm.loadAgentPath(absFile.getAbsolutePath(), null);
-					return null;
-				}
-			});
-		} catch (Exception ex) {
-			throw new RuntimeException("Failed to load lib file [" + fileName + "]", ex);
-		}
-		
-	}
-	
-	
-	public Class<?> getType(final Class<?> klass) {
-		if(klass==null) throw new IllegalArgumentException("The passed class was null");
-		if(!klass.isArray()) return klass;
-		Class<?> tmp = klass;
-		while(tmp.getComponentType()!=null) {
-			tmp = tmp.getComponentType();
-		}
-		return tmp;
+		if(dimTrack) dimension[0] = dim;
+		return current;
 	}
 	
 	/**
@@ -365,9 +351,137 @@ public class Agent {
 	 * @param klass The class to search for instances of
 	 * @return The number of found instances
 	 */
-	public int countExactInstances(Class<?> klass) {
+	public int getInstanceCountOf(Class<?> klass) {
 		if(klass==null) throw new IllegalArgumentException("The passed class was null");
-		return countExactInstances0(klass);
+		return nativeAgent.getInstanceCountOf(klass);
+	}
+	
+	/**
+	 * Returns the number of instances of the passed class 
+	 * or any that implement or inherrit from it 
+	 * @param className The name of the class to count instances for
+	 * @return the number of instances found
+	 */
+	public int getInstanceCountOfAny(final Class<?> klass) {
+		if(klass==null) throw new IllegalArgumentException("The passed class was null");
+		return nativeAgent.getInstanceCountOfAny(klass);
+	}
+	
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#getInstanceCountOf(java.lang.String)
+	 */
+	@Override
+	public int getInstanceCountOf(final String className) {
+		if(className==null || className.trim().isEmpty()) throw new IllegalArgumentException("The passed class name was null or empty");
+		int total = 0;
+		for(Class<?> clazz: resolveClass(className)) {
+			total += getInstanceCountOf(clazz);
+		}
+		return total;
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#getInstanceCountOfAny(java.lang.String)
+	 */
+	@Override
+	public int getInstanceCountOfAny(String className) {
+		int total = 0;
+		for(Class<?> clazz: resolveClass(className)) {
+			total += getInstanceCountOfAny(clazz);
+		}
+		return total;
+	}
+	
+	
+	private Set<Class<?>> resolveClass(final String className) {
+		int arrIndex = className.indexOf(ARRAY_IND);		
+		if(arrIndex!=-1) {
+			int dimension = 0;
+			final String baseClass = className.substring(0, arrIndex);
+			while(arrIndex!=-1) {
+				dimension++;
+				arrIndex = className.indexOf(ARRAY_IND, arrIndex+1);
+			}
+			final Set<Class<?>> baseClasses = resolveClass(baseClass);
+			final Set<Class<?>> arrayClasses = new HashSet<Class<?>>(baseClasses.size());
+			for(Class<?> bClass : baseClasses) {
+				arrayClasses.add(Array.newInstance(bClass, new int[dimension]).getClass());
+			}
+			return arrayClasses;
+		}
+		
+		final Set<Class<?>> resolved = new HashSet<Class<?>>();
+		for(ClassLoader cl : getInstancesOfAny(ClassLoader.class)) {
+			try {
+				resolved.add(cl.loadClass(className));
+			} catch (Throwable ex) {/* No Op */}
+		}
+		return resolved;
+	}
+	
+//	private Set<String> resolveClassToNames(final String className) {
+//		int arrIndex = className.indexOf(ARRAY_IND);		
+//		if(arrIndex!=-1) {
+//			int dimension = 0;
+//			final String baseClass = className.substring(0, arrIndex);
+//			while(arrIndex!=-1) {
+//				dimension++;
+//				arrIndex = className.indexOf(ARRAY_IND, arrIndex+1);
+//			}
+//			final Set<Class<?>> baseClasses = resolveClass(baseClass);
+//			final Set<String> arrayClasses = new HashSet<String>(baseClasses.size());
+//			for(Class<?> bClass : baseClasses) {
+//				arrayClasses.add(renderClassName(Array.newInstance(bClass, new int[dimension]).getClass()));
+//			}
+//			return arrayClasses;
+//		}
+//		
+//		final Set<String> resolved = new HashSet<String>();
+//		for(ClassLoader cl : getInstancesOfAny(ClassLoader.class)) {
+//			try {
+//				resolved.add(renderClassName(cl.loadClass(className)));
+//			} catch (Throwable ex) {/* No Op */}
+//		}
+//		return resolved;
+//	}
+	
+	
+	public String renderClassName(final Class<?> clazz) {
+		if(clazz==null) throw new IllegalArgumentException("The passed class was null");
+		if(clazz.isArray()) {
+			final int[] dimension = new int[]{0};
+			final Class<?> base = getComponentClass(clazz, dimension);
+			final StringBuilder b = new StringBuilder(base.getName());
+			for(int i = 0; i < dimension[0]; i++) {
+				b.append(ARRAY_IND);
+			}
+			return b.toString();
+		}
+		return clazz.getName();
+	}
+	
+	public Set<Class<?>> resolveArrayClassName(final String className) {
+		if(className.length()<3) throw new RuntimeException("Cannot resolve array class name [" + className + "]");
+		int dimensions = 0;
+		final StringBuilder b = new StringBuilder(className);
+		char last = b.charAt(b.length()-1);
+		char plast = b.charAt(b.length()-2);
+		while(last==']' && plast=='[') {
+			dimensions++;
+			b.deleteCharAt(b.length()-1); b.deleteCharAt(b.length()-1);			
+		}
+		final String component = b.toString();
+		final Set<Class<?>> componentClasses = resolveClass(component);
+		final Set<Class<?>> resolvedClasses = new HashSet<Class<?>>();
+		for(Class<?> klazz : componentClasses) {
+			try {
+				resolvedClasses.add(Array.newInstance(klazz, new int[dimensions]).getClass());
+			} catch (Exception x) {/* No Op */}
+		}
+		return resolvedClasses;
 	}
 	
 	/**
@@ -377,10 +491,11 @@ public class Agent {
 	 * Negatives values will be rewarded with an {@link IllegalArgumentException}.
 	 * @return A [possibly zero length] array of objects
 	 */
-	public Object[] getInstancesOf(final Class<?> klass, final int maxInstances) {
+	@SuppressWarnings("unchecked")
+	public <T> T[] getInstancesOf(final Class<T> klass, final int maxInstances) {
 		if(klass==null) throw new IllegalArgumentException("The passed class was null");
 		if(maxInstances<0) throw new IllegalArgumentException("Invalid maxInstances value [" + maxInstances + "]");
-		return getExactInstances0(klass, tagSerial.incrementAndGet(), maxInstances==0 ? Integer.MAX_VALUE : maxInstances);
+		return (T[])nativeAgent.getInstancesOf(klass, maxInstances); 
 	}
 
 	/**
@@ -388,8 +503,19 @@ public class Agent {
 	 * @param klass The class to search and return instances of
 	 * @return A [possibly zero length] array of objects
 	 */
-	public Object[] getInstancesOf(final Class<?> klass) {
+	public <T> T[] getInstancesOf(final Class<T> klass) {
 		return getInstancesOf(klass, Integer.MAX_VALUE);
+	}
+	
+	/**
+	 * Returns an array of instances of the passed class located or inherrited, in the heap, maxing out at {@link Integer#MAX_VALUE} instances.
+	 * @param klass The class to search and return instances of
+	 * @param maxInstances The maximum number of instances to return
+	 * @return A [possibly zero length] array of objects
+	 */
+	@SuppressWarnings("unchecked")
+	public <T> T[] getInstancesOfAny(final Class<T> klass, final int maxInstances) {
+		return (T[]) nativeAgent.getInstancesOfAny(klass, maxInstances); 
 	}
 	
 	/**
@@ -397,76 +523,28 @@ public class Agent {
 	 * @param klass The class to search and return instances of
 	 * @return A [possibly zero length] array of objects
 	 */
-	public Object[] getInstancesOfAny(final Class<?> klass) {
-		return getInstances0(klass, tagSerial.incrementAndGet(), Integer.MAX_VALUE);
+	public <T> T[] getInstancesOfAny(final Class<T> klass) {
+		return getInstancesOfAny(klass, Integer.MAX_VALUE);
 	}
 	
-	/**
-	 * Indicates if the agent was loaded or attached.
-	 * Useful as a basic test for the agent presence.
-	 * @return true if loaded, false if attached
-	 */
-	public boolean wasLoaded() {
-		try {
-			return wasLoaded0();
-		} catch (Throwable t) {
-			return false;
-		}
-	}
-
-	/**
-	 * Prints the count of each type equal to or inherrited 
-	 * from the passed type found in the heap
-	 * @param type The type to search the heap for
-	 * @return a string listing the found types and count for each
-	 */
-	public String printCardinalityOfAny(final Class<?> type) {
-		final Object[] objs = getInstancesOfAny(type);
-		Map<Class<?>, Integer> card = classCardinality(objs);
-		final StringBuilder b = new StringBuilder(card.size() * 20);		
-		for(Map.Entry<Class<?>, Integer> entry: card.entrySet()) {
-			if(b.length() > 0) {
-				b.append("\n");
-			}
-			b.append(entry.getKey().getName()).append(":").append(entry.getValue());			
-		}
-		return b.toString();		
-	}
+//	/**
+//	 * Prints the count of each type equal to or inherrited 
+//	 * from the passed type found in the heap
+//	 * @param type The type to search the heap for
+//	 * @return a string listing the found types and count for each
+//	 */
+//	public String printCardinalityOfAny(final Class<?> type) {
+//		final Object[] objs = getInstancesOfAny(type);
+//		Map<Class<?>, Integer> card = classCardinality(objs);
+//		final StringBuilder b = new StringBuilder(card.size() * 20);		
+//		for(Map.Entry<Class<?>, Integer> entry: card.entrySet()) {
+//			if(b.length() > 0) {
+//				b.append("\n");
+//			}
+//			b.append(entry.getKey().getName()).append(":").append(entry.getValue());			
+//		}
+//		return b.toString();		
+//	}
 	
-	/** The sys prop for the library path */
-	public static final String SYS_LIB_PATH = "java.library.path";
-	
-	public static final String PATH_SEPARATOR = File.pathSeparator;
-	
-	/**
-	 * Appends the passed path to the java library search path
-	 * @param path The path to append
-	 */
-	public void appendToLibPath(final String path) {
-		final String current = System.getProperty(SYS_LIB_PATH);
-		final String newPath = (current==null ? "" : (current + PATH_SEPARATOR)) + path;
-		System.setProperty(SYS_LIB_PATH, newPath);
-		resetLibPath();
-	}
-	
-	private static void resetLibPath() {
-		try {
-			final Field fieldSysPath = ClassLoader.class.getDeclaredField( "sys_paths" ); 
-			fieldSysPath.setAccessible( true ); 
-			fieldSysPath.set( null, null ); 
-		} catch (Exception ex) {
-			throw new RuntimeException(ex);
-		}
-	}
-	
-
-	//============================================================================
-	//	Native JVMTI calls
-	//============================================================================
-	private static native int countExactInstances0(Class<?> klass);	
-	private static native int countInstances0(Class<?> klass, long tag, int maxInstances);
-	private static native Object[] getExactInstances0(Class<?> klass, long tag, int maxInstances);
-	private static native Object[] getInstances0(Class<?> klass, long tag, int maxInstances);
-	private static native boolean wasLoaded0();
 }	
 	

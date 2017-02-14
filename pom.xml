@@ -10,8 +10,8 @@
   <properties>
   	<!-- General Project Properties -->
 	<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-	<compiler-source.version>1.6</compiler-source.version>
-	<compiler-target.version>1.6</compiler-target.version>
+	<compiler-source.version>1.8</compiler-source.version>
+	<compiler-target.version>1.8</compiler-target.version>
 
   	<!-- Test Dependencies -->
     <junit.version>4.8.2</junit.version>
@@ -27,6 +27,7 @@
 	<cobertura.version>2.5.1</cobertura.version>
 	<native-plugin.version>1.0-alpha-8</native-plugin.version>
 	<exec-plugin.version>1.3.2</exec-plugin.version>
+	<shade.version>2.1</shade.version>
 	<!-- Abs JVM -->
 	<jvm.home>/usr/lib/jvm/jdk1.8.0_31</jvm.home>
   </properties>
@@ -147,7 +148,70 @@
                       	<argument>com.heliosapm.jvmti.agent.Agent</argument>
                       </arguments>
               </configuration>
-            </plugin>		    
+            </plugin>
+            
+       	<plugin>
+		  <groupId>org.apache.maven.plugins</groupId>
+		  <artifactId>maven-jar-plugin</artifactId>
+		  <version>${jar-plugin.version}</version>		
+		  <configuration>
+		      <archive>
+				  <manifest>
+				      <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+				      <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+				      <addClasspath>true</addClasspath>
+				  </manifest>
+				  <manifestEntries>
+			    		<Main-Class>com.heliosapm.jvmti.install.AgentInstaller</Main-Class> 
+			    		<Premain-Class>com.heliosapm.jvmti.install.JavaAgent</Premain-Class>
+		            	<Agent-Class>com.heliosapm.jvmti.install.JavaAgent</Agent-Class>
+		            	<Can-Redefine-Classes>true</Can-Redefine-Classes>
+		            	<Can-Retransform-Classes>true</Can-Retransform-Classes>
+		            	<Can-Set-Native-Method-Prefix>true</Can-Set-Native-Method-Prefix>				    
+				  </manifestEntries>
+		      </archive>
+		  </configuration>
+         </plugin>
+            
+            
+	  <plugin>
+	    <groupId>org.apache.maven.plugins</groupId>
+	    <artifactId>maven-shade-plugin</artifactId>
+	    <version>${shade.version}</version>
+	        <executions>
+	            <execution>
+	              <phase>package</phase>
+	              <goals>
+	                <goal>shade</goal>
+	              </goals>
+	              <configuration>
+	                <artifactSet>
+	                  <excludes>
+		                  <exclude>META-INF/*.SF</exclude>
+		                  <exclude>META-INF/*.DSA</exclude>
+		                  <exclude>META-INF/*.RSA</exclude>                       
+	                  </excludes>
+	                  <includes>
+	                    
+	                  </includes>
+	                </artifactSet>
+	              <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+	              <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+	              <includePluginDependencies>false</includePluginDependencies>
+	            <transformers>
+	                  <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+	                  <transformer implementation="org.apache.maven.plugins.shade.resource.ComponentsXmlResourceTransformer"/>
+	                  <transformer implementation="org.apache.maven.plugins.shade.resource.DontIncludeResourceTransformer">
+	                    <resource>.SF</resource>
+	                    <resource>.DSA</resource>
+	                    <resource>.RSA</resource>
+	                </transformer>
+	                </transformers>
+	              </configuration>
+	            </execution>
+	          </executions>   
+	      </plugin>
+            		    
 	  </plugins>
 
 

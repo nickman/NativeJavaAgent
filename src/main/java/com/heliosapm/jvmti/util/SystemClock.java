@@ -257,7 +257,7 @@ public class SystemClock {
 		}
 		
 		
-		private long _avg(double time, double cnt) {
+		private static long _avg(double time, double cnt) {
 			if(time==0 || cnt==0 ) return 0L;
 			double d = time/cnt;
 			return Math.round(d);
@@ -330,7 +330,7 @@ public class SystemClock {
 			long elapsedNs = endNs - startNs;
 			long avgNs = _avg(elapsedNs, cnt);
 			return String.format("Completed %s %s in %s ms.  AvgPer: %s ms/%s \u00b5s/%s ns.",
-					cnt,
+					(long)cnt,
 					unitName, 
 					TimeUnit.MILLISECONDS.convert(elapsedNs, TimeUnit.NANOSECONDS),
 					TimeUnit.MILLISECONDS.convert(avgNs, TimeUnit.NANOSECONDS),
@@ -338,6 +338,20 @@ public class SystemClock {
 					avgNs					
 			);
 		}
+		
+		public static String printAvg(String unitName, double cnt, final long elapsed, final TimeUnit unit) {
+			final long elapsedNs = TimeUnit.NANOSECONDS.convert(elapsed, unit);
+			long avgNs = _avg(elapsedNs, cnt);
+			return String.format("Completed %s %s in %s ms.  AvgPer: %s ms/%s \u00b5s/%s ns.",
+					(long)cnt,
+					unitName, 
+					TimeUnit.MILLISECONDS.convert(elapsedNs, TimeUnit.NANOSECONDS),
+					TimeUnit.MILLISECONDS.convert(avgNs, TimeUnit.NANOSECONDS),
+					TimeUnit.MICROSECONDS.convert(avgNs, TimeUnit.NANOSECONDS),
+					avgNs					
+			);
+		}
+		
 		
 	}
 	

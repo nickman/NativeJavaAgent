@@ -12,11 +12,11 @@
 // see <http://www.gnu.org/licenses/>.
 package com.heliosapm.jvmti.install;
 
-import java.lang.instrument.Instrumentation;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.StringTokenizer;
+import java.util.Map;
+import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import com.heliosapm.shorthand.attach.vm.VirtualMachine;
 
 //import com.heliosapm.utils.classload.IsolatedClassLoader;
 
@@ -37,6 +37,8 @@ public class AgentInstaller {
 	/** The booted agent instance */
 	public static Object bootedAgent = null;
 	
+	/** System property set in target JVM when agent is installed */
+	public static final String AGENT_INSTALLED_PROP = "com.heliosapm.jvmti.agent.installed";
 	
 	/**
 	 * Entry point to invoke the agent installer
@@ -47,67 +49,36 @@ public class AgentInstaller {
 	 * </ul>
 	 */
 	public static void main(final String[] args) {
-		
+		final StringBuilder packedAgentOptions = new StringBuilder();
+		final Map<AgentOption, Object> agentOptions = AgentOption.commandLine(packedAgentOptions, args);
+		install(agentOptions, packedAgentOptions.toString());
 	}
 	
-	/**
-	 * The agent bootstrap entry point
-	 * @param agentArgs The agent initialization arguments
-	 * @param inst The instrumentation instance
-	 */	
-	public static void main(final String agentArgs, final Instrumentation inst) {
-	}
-	
-	private static String[] args(final String delim, final String agentArgs) {
-		final List<String> l = new ArrayList<String>();
-		final StringTokenizer tokenizer = new StringTokenizer(agentArgs, delim);
-		while (tokenizer.hasMoreTokens()) {
-			final String token = tokenizer.nextToken();
-			if(token!=null && !token.trim().isEmpty()) {
-				l.add(token.trim());
+	private static void install(final Map<AgentOption, Object> agentOptions, final String packedAgentOptions) {		
+		VirtualMachine vm = null;
+		try {
+			final String pid = (String)agentOptions.get(AgentOption.PID);
+			LOG.log(Level.INFO, "Installing Agent into JVM [" + pid + "]...");
+			vm = VirtualMachine.attach(pid);
+			if(vm.getSystemProperties().containsKey(AGENT_INSTALLED_PROP)) {
+				LOG.log(Level.WARNING, "Agent already installed in JVM [" + pid + "]");
+				return;
 			}
+			final String jarFile = AgentInstaller.class.getProtectionDomain().getCodeSource().getLocation().getFile();
+			LOG.log(Level.INFO, "Agent jar [" + jarFile + "]");
+			if(packedAgentOptions.isEmpty()) {
+				LOG.log(Level.INFO, "Executing [vm.loadAgent(\"" + jarFile + "\")]");
+				vm.loadAgent(jarFile);				
+			} else {
+				LOG.log(Level.INFO, "Executing [vm.loadAgent(\"" + jarFile + "\",\"" + packedAgentOptions + "\")]");
+				vm.loadAgent(jarFile, packedAgentOptions);
+			}
+			LOG.log(Level.INFO, "Successfully installed Agent jar [" + jarFile + "] into JVM [" + pid + "]");
+		} catch (Throwable ex) {
+			LOG.log(Level.SEVERE, "Failed to install Agent", ex);
+		} finally {
+			if(vm!=null) try { vm.detach(); } catch (Exception x) {/* No Op */}
 		}
-		return l.toArray(new String[0]);
-	}
-	
-	private static String delim(final String agentArgs) {
-		final int index = agentArgs.indexOf(DELIM_TERM);
-		if(index<1) throw new IllegalArgumentException("The agent arguments [" + agentArgs + "] had no delimeter termination.");
-		return agentArgs.substring(0, index);
-	}
-
-	/**
-	 * The agent bootstrap entry point
-	 * @param agentArgs The agent initialization arguments
-	 * @param inst The instrumentation instance
-	 */	
-	public static void agentmain(final String agentArgs, final Instrumentation inst) {
-		main(agentArgs, inst);
-	}
-	
-	/**
-	 * The agent bootstrap entry point
-	 * @param agentArgs The agent initialization arguments
-	 * @param inst The instrumentation instance
-	 */
-	public static void premain(final String agentArgs, final Instrumentation inst) {	
-		main(agentArgs, inst);
-	}
-	
-	/**
-	 * The agent bootstrap entry point which fails the install since there is no instrumentation
-	 * @param agentArgs The agent initialization arguments
-	 */	
-	public static void agentmain(final String agentArgs) {
-		main(agentArgs, null);
-	}
-	
-	/**
-	 * The agent bootstrap entry point which fails the install since there is no instrumentation
-	 * @param agentArgs The agent initialization arguments
-	 */	
-	public static void premain(final String agentArgs) {
-		main(agentArgs, null);
 	}
 
 }
