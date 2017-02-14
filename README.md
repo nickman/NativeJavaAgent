@@ -28,13 +28,16 @@ Here's an  simple example of getting instance counts:
 
 The output is:
 
-> Initializing Agent OnAttach...
-> Agent Initialized
-> Object instance count:467
-> CharSequence instance count:3196
-> Elapsed:3 ms.
+```
+Initializing Agent OnAttach...
+Agent Initialized
+Object instance count:467
+CharSequence instance count:3196
+Elapsed:3 ms.
+```
 
 What's going on here:
+
 1. Acquire the (singleton) agent using `com.heliosapm.jvmti.agent.Agent.getInstance()`. In this case, the underlying native JVMTI library was loaded at runtime. The library can be loaded at boot time using `-agentpath:oif_agent.so` or if not loaded on boot, it will be loaded dynamically when the agent is first called.
 2. Calling `agent.getInstanceCountOf(Object.class)` returns the number of Object instances found in the heap. The `getInstanceCountOf` method only counts objects of the exact type so it will not count instances of any type inherrited from `java.lang.Object` (basically everything else).
 3. On the other hamd, in the next call, `agent.getInstanceCountOfAny(CharSequence.class)`, counts all instances in the heap that extend `java.lang.CharSequence`.
@@ -63,10 +66,11 @@ What's going on here:
 
 .... then the output of the second timing is:
 
-> Object instance count:450
-> CharSequence instance count:3174
-> Elapsed:1 ms.
-
+```
+Object instance count:450
+CharSequence instance count:3174
+Elapsed:1 ms.
+```
 
 Note that background activity and the agent itself generate some number of objects, so for "accurate" counts, I am calling System.gc() at specific points so we're not counting unreachable but uncleared objects.
 
@@ -88,14 +92,16 @@ In this example, the agent acquires the actual references to the first 20 `java.
 ```
 Your output will vary, but in my last test I saw:
 
-> Initializing Agent OnAttach...
-> Agent Initialized
-> Aborting Instance Tagging after 20 Instances
-> String #10: [Unexpected vector type encounterd: entry_offset = ]
-> String #11: [ (0x]
-> String #12: [), units = ]
-> String #13: [Unexpected variability attribute: entry_offset = 0x]
-> String #14: [ name = ]
+```
+Initializing Agent OnAttach...
+Agent Initialized
+Aborting Instance Tagging after 20 Instances
+String #10: [Unexpected vector type encounterd: entry_offset = ]
+String #11: [ (0x]
+String #12: [), units = ]
+String #13: [Unexpected variability attribute: entry_offset = 0x]
+String #14: [ name = ]
+```
 
 As with the counting calls, the instance calls come in 2 flavours where `getInstancesOf` only retrieves objects of the exact supplied type, whereas the `getInstancesOfAny` retrieves instances of the specified type or any type that inherrits/extends that type. Repeating the same example for `CharSequence`s:
 
@@ -110,14 +116,10 @@ As with the counting calls, the instance calls come in 2 flavours where `getInst
 
 The output:
 
-> CharSequence#10: Type:java.lang.String, Value:[%(\d+\$)?([-#+ 0,(\<]*)?(\d+)?(\.\d+)?([tT])?([a-zA-Z%])]
-> CharSequence#11: Type:java.lang.String, Value:[DISPLAY]
-> CharSequence#12: Type:java.lang.String, Value:[user.language.display]
-> CharSequence#13: Type:java.lang.String, Value:[user.script.display]
-> CharSequence#14: Type:java.lang.String, Value:[user.country.display]
-
-
-
-
-
-
+```
+CharSequence#10: Type:java.lang.String, Value:[%(\d+\$)?([-#+ 0,(\<]*)?(\d+)?(\.\d+)?([tT])?([a-zA-Z%])]
+CharSequence#11: Type:java.lang.String, Value:[DISPLAY]
+CharSequence#12: Type:java.lang.String, Value:[user.language.display]
+CharSequence#13: Type:java.lang.String, Value:[user.script.display]
+CharSequence#14: Type:java.lang.String, Value:[user.country.display]
+```
