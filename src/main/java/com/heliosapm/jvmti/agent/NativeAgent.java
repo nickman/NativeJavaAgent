@@ -338,7 +338,7 @@ public class NativeAgent {
 	public int getInstanceCountOf(final Class<?> exactType) {
 		if(exactType==null) throw new IllegalArgumentException("The passed class was null");
 		if(!isConcrete(exactType)) return 0;
-		return countExactInstances0(exactType, tagSerial.incrementAndGet());
+		return countExactInstances0(exactType, tagSerial.incrementAndGet(), Integer.MAX_VALUE);
 	}
 	
 	/**
@@ -348,7 +348,7 @@ public class NativeAgent {
 	 */
 	public int getInstanceCountOfAny(final Class<?> anyType) {
 		if(anyType==null) throw new IllegalArgumentException("The passed class was null");
-		return countInstances0(anyType, tagSerial.incrementAndGet());
+		return countInstances0(anyType, tagSerial.incrementAndGet(), Integer.MAX_VALUE);
 	}
 	
 	/**
@@ -380,8 +380,8 @@ public class NativeAgent {
 	//============================================================================
 	//	Native JVMTI calls
 	//============================================================================
-	private static native int countExactInstances0(Class<?> klass, long tag);	
-	private static native int countInstances0(Class<?> klass, long tag);
+	private static native int countExactInstances0(Class<?> klass, long tag, int maxInstances);	
+	private static native int countInstances0(Class<?> klass, long tag, int maxInstances);
 	private static native Object[] getExactInstances0(Class<?> klass, long tag, int maxInstances);
 	private static native Object[] getInstances0(Class<?> klass, long tag, int maxInstances);
 	private static native boolean wasLoaded0();
