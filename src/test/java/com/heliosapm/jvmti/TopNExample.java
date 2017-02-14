@@ -12,38 +12,34 @@
 // see <http://www.gnu.org/licenses/>.
 package com.heliosapm.jvmti;
 
+import java.util.Map;
+
 import com.heliosapm.jvmti.agent.Agent;
 
 /**
- * <p>Title: InstancesExample</p>
- * <p>Description: Example acquiring instances</p> 
+ * <p>Title: TopNExample</p>
+ * <p>Description: Example for top n</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>com.heliosapm.jvmti.InstancesExample</code></p>
+ * <p><code>com.heliosapm.jvmti.TopNExample</code></p>
  */
 
-public class InstancesExample {
+public class TopNExample {
 
 	/**
-	 * Example acquiring instances
-	 * @param args none. 
+	 * Lists the top n 
+	 * @param args None
 	 */
 	public static void main(String[] args) {
 		final Agent agent = Agent.getInstance();
 		System.gc();
-		String[] strings = agent.getInstancesOf(String.class, 20);
-		for(int i = 10; i < 15; i++) {
-			log("String #%s: [%s]", i, strings[i]);
+		final Map<Class<Object>, Long> topMap = agent.getTopNInstanceCounts(Object.class, 10, false);
+		for(Map.Entry<Class<Object>, Long> entry: topMap.entrySet()) {
+			log("%s  :  %s", Agent.renderClassName(entry.getKey()), entry.getValue());
 		}
-		strings = null;  // Don't prevent gc of these objects !
-
-		CharSequence[] charSeqs = agent.getInstancesOfAny(CharSequence.class, 20);
-		for(int i = 10; i < 15; i++) {
-			log("CharSequence#%s: Type:%s, Value:[%s]", i, charSeqs[i].getClass().getName(), charSeqs[i].toString());
-		}
-		charSeqs = null;
-		
+		topMap.clear();  // don't prevent gc !
 	}
+	
 	
 	/**
 	 * Low maintenance formatted message logger

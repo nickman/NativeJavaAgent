@@ -332,7 +332,7 @@ public class Agent implements AgentMBean {
 	 * Ignored if null or zero length.
 	 * @return the base component class for the passed type
 	 */
-	public Class<?> getComponentClass(final Class<?> arrayType, final int[] dimension) {
+	public static Class<?> getComponentClass(final Class<?> arrayType, final int[] dimension) {
 		if(arrayType==null) throw new IllegalArgumentException("The passed class was null");		
 		if(!arrayType.isArray()) return arrayType;
 		final boolean dimTrack = dimension!=null && dimension.length > 0;
@@ -449,7 +449,7 @@ public class Agent implements AgentMBean {
 //	}
 	
 	
-	public String renderClassName(final Class<?> clazz) {
+	public static String renderClassName(final Class<?> clazz) {
 		if(clazz==null) throw new IllegalArgumentException("The passed class was null");
 		if(clazz.isArray()) {
 			final int[] dimension = new int[]{0};

@@ -123,3 +123,63 @@ CharSequence#12: Type:java.lang.String, Value:[user.language.display]
 CharSequence#13: Type:java.lang.String, Value:[user.script.display]
 CharSequence#14: Type:java.lang.String, Value:[user.country.display]
 ```
+
+### Top N Type Instances
+
+Top N supports finding the types for which there are the most instances, so you can determine what your top *n* types in the heap are. For example:
+
+```java
+	public static void main(String[] args) {
+		final Agent agent = Agent.getInstance();
+		System.gc();
+		final Map<Class<Object>, Long> topMap = agent.getTopNInstanceCounts(Object.class, 10, true);
+		for(Map.Entry<Class<Object>, Long> entry: topMap.entrySet()) {
+			log("%s  :  %s", Agent.renderClassName(entry.getKey()), entry.getValue());
+		}
+		topMap.clear();  // don't prevent gc !
+	}
+```
+
+My output was:
+
+```
+Initializing Agent OnAttach...
+Agent Initialized
+java.lang.String  :  3171
+java.lang.Class  :  1105
+java.lang.Object[]  :  1052
+java.lang.reflect.Method  :  550
+java.lang.Object  :  467
+java.util.concurrent.ConcurrentHashMap$Node  :  424
+java.util.HashMap$Node  :  418
+java.lang.Class[]  :  395
+java.lang.String[]  :  313
+java.lang.reflect.Field  :  295
+```
+
+Note that the `Agent.renderClassName` method switches the internal array type names to the more visually clear **&lt;type&gt;[]...** syntax.
+
+The getTopNInstanceCounts parameters are:
+
+1. The type. Matching is *Any* since specific type matching is not useful.
+2. The *n* in TopN.
+3. Indicates if primitives and primitive array types should be ignored in computing the TopN. 
+
+Ignoring primitives and primitve arrays can make a big difference when values of *N* are small. In the example above, if we switch to not ignoring....
+
+```
+Initializing Agent OnAttach...
+Agent Initialized
+char[]  :  3185
+java.lang.String  :  3171
+java.lang.Class  :  1105
+java.lang.Object[]  :  1052
+java.lang.reflect.Method  :  550
+java.lang.Object  :  467
+java.util.concurrent.ConcurrentHashMap$Node  :  424
+java.util.HashMap$Node  :  418
+java.lang.Class[]  :  395
+java.lang.String[]  :  313
+```
+
+which is not too bad, but for real applications, you may find byte and byte arrays dominate instance counts. Plus, all (non-empty?) strings will always contain `char[]` instances so will typically outnumber Strings.
