@@ -7,8 +7,8 @@ W32CPP=i686-w64-mingw32-g++
 
 
 C64FLAGS       = -O3 -m64 -fPIC -pthread -DLINUX -D_LP64=1 
-W64FLAGS       = -O3 -m64 -fPIC -pthread -DWINDOWS -D_LP64=1
-W32FLAGS       = -O3 -m32 -fPIC -pthread -DWINDOWS -D_LP32=1 
+W64FLAGS       = -O3 -m64 -pthread -DWINDOWS -D_LP64=1
+W32FLAGS       = -O3 -m32 -pthread -DWINDOWS -D_LP32=1 
 C32FLAGS       = -Wall -O3 -m32 -fPIC -pthread -DLINUX -D_LP32=1 
 #-fPIC -g #-pedantic -Wall -Wextra -march=native -ggdb3
 LDFLAGS      = -shared

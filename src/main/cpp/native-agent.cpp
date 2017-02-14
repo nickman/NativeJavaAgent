@@ -32,7 +32,7 @@ JNIEXPORT jint JNICALL Agent_OnAttach(JavaVM* jvm, char *options, void *reserved
   onLoad = false;
   jvmtiEnv *jvmti = NULL;
   jvmtiCapabilities capa;
-  jvmtiError error;
+  //jvmtiError error;
   
   // put a jvmtiEnv instance at jvmti.
   jint result = jvm->GetEnv((void **) &jvmti, JVMTI_VERSION_1_2);
@@ -43,7 +43,7 @@ JNIEXPORT jint JNICALL Agent_OnAttach(JavaVM* jvm, char *options, void *reserved
   (void)memset(&capa, 0, sizeof(jvmtiCapabilities));
   capa.can_tag_objects = 1;
   capa.can_generate_compiled_method_load_events = 1;
-  error = (jvmti)->AddCapabilities(&capa);
+  (jvmti)->AddCapabilities(&capa);
  
   // store jvmti in a global data
   gdata = new GlobalAgentData();
@@ -60,7 +60,7 @@ JNIEXPORT jint JNICALL Agent_OnLoad(JavaVM *jvm, char *options, void *reserved) 
   onLoad = true;
   jvmtiEnv *jvmti = NULL;
   jvmtiCapabilities capa;
-  jvmtiError error;
+  //jvmtiError error;
   
   // put a jvmtiEnv instance at jvmti.
   jint result = jvm->GetEnv((void **) &jvmti, JVMTI_VERSION_1_2);
@@ -71,7 +71,7 @@ JNIEXPORT jint JNICALL Agent_OnLoad(JavaVM *jvm, char *options, void *reserved) 
   (void)memset(&capa, 0, sizeof(jvmtiCapabilities));
   capa.can_tag_objects = 1;
   capa.can_generate_compiled_method_load_events = 1;
-  error = (jvmti)->AddCapabilities(&capa);
+  (jvmti)->AddCapabilities(&capa);
  
   // store jvmti in a global data
   gdata = new GlobalAgentData();
@@ -115,7 +115,8 @@ JNIEXPORT jint JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_countExactInst
   jvmtiHeapCallbacks callbacks;
   (void)memset(&callbacks, 0, sizeof(callbacks));
   callbacks.heap_iteration_callback = &objectCountingCallback;
-  jvmtiError error = gdata->jvmti->IterateThroughHeap(0, klass, &callbacks, &count);
+  //jvmtiError error = 
+  gdata->jvmti->IterateThroughHeap(0, klass, &callbacks, &count);
   return count;
 }
 
@@ -143,10 +144,12 @@ JNIEXPORT jobjectArray  JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_getEx
   ctx->tagCount = 0;
   ctx->tagMax = max;
   ctx->tag = &tag;
-  jvmtiError error = gdata->jvmti->IterateThroughHeap(0, klass, &callbacks, ctx);
+  //jvmtiError error = 
+  gdata->jvmti->IterateThroughHeap(0, klass, &callbacks, ctx);
   jobject* objArr;
   jlong* tagArr;
-  jvmtiError errorGet = gdata->jvmti->GetObjectsWithTags(1, &tag, &ctx->tagCount, &objArr, &tagArr);
+  //jvmtiError errorGet = 
+  gdata->jvmti->GetObjectsWithTags(1, &tag, &ctx->tagCount, &objArr, &tagArr);
   jobjectArray ret = env->NewObjectArray(ctx->tagCount, klass, NULL);
   for (int n=0; n<ctx->tagCount; n++) {
     env->SetObjectArrayElement(ret, n, objArr[n]);
@@ -192,7 +195,8 @@ JNIEXPORT jobjectArray  JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_getIn
   
     jobject* objArr;
     jlong* tagArr;
-    jvmtiError errorGet = gdata->jvmti->GetObjectsWithTags(1, &tg, &ctx->tagCount, &objArr, &tagArr);
+    //jvmtiError errorGet = 
+    gdata->jvmti->GetObjectsWithTags(1, &tg, &ctx->tagCount, &objArr, &tagArr);
     jobjectArray ret = env->NewObjectArray(ctx->tagCount, targetClass, NULL);
     for (int n=0; n<ctx->tagCount; n++) {
       env->SetObjectArrayElement(ret, n, objArr[n]);
