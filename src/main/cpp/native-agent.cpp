@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <cstring>
 
+
  
 using namespace std;
  
@@ -21,8 +22,108 @@ typedef struct {
 static GlobalAgentData *gdata;
 static bool onLoad;
 
+
+static jobject callbacksInstance;
+static jmethodID callbackIncrementMethod;
+static jmethodID callbackCompleteMethod;
+static JavaVM *jvm;
+
+
 extern "C"
-JNIEXPORT jboolean JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_wasLoaded0(JNIEnv *env, jclass thisClass) {
+JNIEXPORT jboolean JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_initCallbacks0(JNIEnv *env, jclass thisClass, jobject callbackSite) {    
+  env->GetJavaVM(&jvm);
+  callbacksInstance = env->NewGlobalRef(callbackSite);
+  callbackIncrementMethod = env->GetMethodID(thisClass, "increment", "(JLjava/lang/Object;)V");
+  callbackCompleteMethod = env->GetMethodID(thisClass, "complete", "(J)V");
+  cout << "Callback increment method:" << callbacksInstance << "->" << callbackIncrementMethod << endl;
+  cout << "Callback complete method:" << callbacksInstance << "->" << callbackCompleteMethod << endl;
+  return true;
+}
+
+extern "C"
+JNICALL jvmtiIterationControl typeInstanceCountingCallback(jlong class_tag, jlong size, jlong* tag_ptr, void* user_data) {
+    // *tag_ptr = 1;
+    // return JVMTI_ITERATION_CONTINUE;
+
+  TagContext* ctx = (TagContext*) user_data; 
+  //printf("typeInstanceCountingCallback %d objects with tag\n", ctx->tagCount);
+  if(ctx->tagMax!=0 && ctx->tagCount >= ctx->tagMax) {
+    cout << "Aborting Instance Tagging after " << ctx->tagCount << " Instances" << endl;
+    return JVMTI_ITERATION_ABORT;
+  }
+  ctx->tagCount++;
+  *tag_ptr = *ctx->tag;
+  return JVMTI_ITERATION_CONTINUE;
+}
+
+
+  // public void complete(final long tag) {
+  // public void increment(final long tag, final Object obj) {
+
+
+extern "C"
+JNIEXPORT void JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_typeCardinality0(JNIEnv *env, jclass thisClass, jclass targetClass, jlong tg, jint max) {  
+    
+    
+    TagContext* ctx = new TagContext();
+    ctx->tagCount = 0;
+    ctx->tagMax = max;
+    ctx->tag = &tg;
+
+    jvmtiCapabilities capabilities = {0};
+    capabilities.can_tag_objects = 1;
+    gdata->jvmti->AddCapabilities(&capabilities);
+
+    gdata->jvmti->IterateOverInstancesOfClass(targetClass, JVMTI_HEAP_OBJECT_EITHER, &typeInstanceCountingCallback, ctx);
+    // cout << "Heap Iteration Complete" << endl;
+    jobject* objArr;
+    jlong* tagArr;
+
+    gdata->jvmti->GetObjectsWithTags(1, &tg, &ctx->tagCount, &objArr, &tagArr);
+    // cout << "Starting Object Callbacks:" << ctx->tagCount << endl;
+    jvm->AttachCurrentThread((void **)&env, NULL);
+    // cout << "Thread attached" << endl;
+    for (int n=0; n<ctx->tagCount; n++) {
+        //(*env)->CallVoidMethod(callbacksInstance, callbackIncrementMethod, tg, objArr[n]);
+        env->CallVoidMethod(callbacksInstance, callbackIncrementMethod, tg, objArr[n]);
+    }
+    //(*env)->CallVoidMethod(callbacksInstance, callbackCompleteMethod, tg);
+    env->CallVoidMethod(callbacksInstance, callbackCompleteMethod, tg);
+    jvm->DetachCurrentThread();
+    // cout << "Thread dettached" << endl;
+    gdata->jvmti->Deallocate((unsigned char*)objArr);
+    gdata->jvmti->Deallocate((unsigned char*)tagArr);
+}
+
+// JNIEXPORT jobjectArray  JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_getInstances0(JNIEnv* env, jclass ignored, jclass targetClass, jlong tg, jint max) {
+//     TagContext* ctx = new TagContext();
+//     ctx->tagCount = 0;
+//     ctx->tagMax = max;
+//     ctx->tag = &tg;
+
+
+//     jvmtiCapabilities capabilities = {0};
+//     capabilities.can_tag_objects = 1;
+//     gdata->jvmti->AddCapabilities(&capabilities);
+
+//     gdata->jvmti->IterateOverInstancesOfClass(targetClass, JVMTI_HEAP_OBJECT_EITHER, &typeInstanceCountingCallback, ctx);
+  
+//     jobject* objArr;
+//     jlong* tagArr;
+//     //jvmtiError errorGet = 
+//     gdata->jvmti->GetObjectsWithTags(1, &tg, &ctx->tagCount, &objArr, &tagArr);
+//     jobjectArray ret = env->NewObjectArray(ctx->tagCount, targetClass, NULL);
+//     for (int n=0; n<ctx->tagCount; n++) {
+//       env->SetObjectArrayElement(ret, n, objArr[n]);
+//     }
+//     gdata->jvmti->Deallocate((unsigned char*)objArr);
+//     gdata->jvmti->Deallocate((unsigned char*)tagArr);
+//     return ret; 
+
+
+
+extern "C"
+JNIEXPORT jboolean JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_wasLoaded0(JNIEnv *env, jclass thisClass) {  
   return onLoad;
 }
 
@@ -92,21 +193,6 @@ JNICALL jint objectCountingCallback(jlong class_tag, jlong size, jlong* tag_ptr,
  return JVMTI_VISIT_OBJECTS;
 }
 
-extern "C"
-JNICALL jvmtiIterationControl typeInstanceCountingCallback(jlong class_tag, jlong size, jlong* tag_ptr, void* user_data) {
-    // *tag_ptr = 1;
-    // return JVMTI_ITERATION_CONTINUE;
-
-  TagContext* ctx = (TagContext*) user_data; 
-  //printf("typeInstanceCountingCallback %d objects with tag\n", ctx->tagCount);
-  if(ctx->tagMax!=0 && ctx->tagCount >= ctx->tagMax) {
-    cout << "Aborting Instance Tagging after " << ctx->tagCount << " Instances" << endl;
-    return JVMTI_ITERATION_ABORT;
-  }
-  ctx->tagCount++;
-  *tag_ptr = *ctx->tag;
-  return JVMTI_ITERATION_CONTINUE;
-}
 
  
 extern "C"
@@ -204,8 +290,7 @@ JNIEXPORT jobjectArray  JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_getIn
     gdata->jvmti->Deallocate((unsigned char*)objArr);
     gdata->jvmti->Deallocate((unsigned char*)tagArr);
     return ret; 
-
-
 }
+
 
 

@@ -22,7 +22,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -62,6 +64,12 @@ public class NativeAgent {
 	public static final String PID = ManagementFactory.getRuntimeMXBean().getName().split("@")[0];
 	/** The directory prefix when loading the default lib in dev mode */
 	public static final String DEV_DIR_PREFIX = "target/native/";
+	/** Class Cardinality counter map */
+	private final ConcurrentHashMap<Long, ConcurrentHashMap<Class<?>, long[]>> classCounter = new ConcurrentHashMap<Long, ConcurrentHashMap<Class<?>, long[]>>();
+	
+	/** long array place holder */
+	private static final long[] PLACEHOLDER = {}; 
+	
 	
 	/** The tag serial */
 	private final AtomicLong tagSerial = new AtomicLong(0L);
@@ -144,6 +152,7 @@ public class NativeAgent {
 				}
 				loadLibFromFile(libToLoad);
 				libLocation = libToLoad;
+				initCallbacks0(this);
 				System.setProperty(AGENT_INSTALLED_PROP, "true");
 			} catch (Throwable t) {
 				nativeLoaded.set(false);	
@@ -311,6 +320,65 @@ public class NativeAgent {
 		return !(Modifier.isInterface(mods) || Modifier.isAbstract(mods));
 	}
 	
+	public static void log(Object fmt, Object...args) {
+		System.out.println(String.format(fmt.toString(), args));
+	}
+
+	
+	
+	public void countCallback(final Class<?> clazz) {
+		log("Instance Found:" + clazz.getName());
+	}
+	
+	/**
+	 * Returns a count of instances in the heap of or inherrited from the passed class
+	 * @param klazz The class to get instance counts for
+	 * @return A map of instance counts keyed by the class
+	 */
+	public Map<Class<?>, long[]> getInstanceCardinality(final Class<?> klazz) {
+		if(klazz==null) throw new IllegalArgumentException("The passed class was null");
+		final long tag = tagSerial.incrementAndGet();
+		classCounter.put(tag, new ConcurrentHashMap<Class<?>, long[]>());
+		typeCardinality0(klazz, tag, Integer.MAX_VALUE);
+		return classCounter.remove(tag);
+	}
+
+	//============================================================================
+	//	Cardinality Callbacks
+	//============================================================================
+	
+	/**
+	 * Callback from the native lib when running {@link #typeCardinality0(Class, long, int)}.
+	 * Accumulates the count of each type of object tagged.
+	 * @param tag The tag used for object tagging
+	 * @param obj The tagged object
+	 */
+	public void increment(final long tag, final Object obj) {
+		if(obj==null) return;
+		final Class<?> clazz = obj.getClass();
+		final ConcurrentHashMap<Class<?>, long[]> map = classCounter.get(tag);
+		long[] counter = map.putIfAbsent(clazz, PLACEHOLDER);
+		if(counter==null || counter==PLACEHOLDER) {
+			counter = new long[]{1L};
+			map.replace(clazz, PLACEHOLDER, counter);
+		} else {
+			counter[0]++;			
+		}
+	}
+	
+	/**
+	 * Callback from the native lib when {@link #typeCardinality0(Class, long, int)} is complete.
+	 * @param tag The tag used for object tagging
+	 */
+	public void complete(final long tag) {		
+//		final ConcurrentHashMap<Class<?>, long[]> map = classCounter.get(tag);
+//		log("Cardinality Count Complete. Size:" + map.size());
+//		for(Map.Entry<Class<?>, long[]> entry: map.entrySet()) {
+//			log(entry.getKey().getName() + ":" + entry.getValue()[0]);
+//		}
+	}
+	
+	
 	//============================================================================
 	//	Native JVMTI call wrappers
 	//============================================================================
@@ -376,6 +444,17 @@ public class NativeAgent {
 		return (T[])getInstances0(anyType, tagSerial.incrementAndGet(), maxInstances);		
 	}
 	
+	public static void main(String[] args) {
+		log("Initializing....");
+		final NativeAgent na = getInstance();
+		log("Initialized.");
+		final long tag = na.tagSerial.incrementAndGet();
+		na.classCounter.put(tag, new ConcurrentHashMap<Class<?>, long[]>());
+		final long start = System.currentTimeMillis();
+		typeCardinality0(Object.class, tag, Integer.MAX_VALUE);
+		log("Elapsed:" + (System.currentTimeMillis() - start));
+	}
+	
 
 	//============================================================================
 	//	Native JVMTI calls
@@ -385,6 +464,8 @@ public class NativeAgent {
 	private static native Object[] getExactInstances0(Class<?> klass, long tag, int maxInstances);
 	private static native Object[] getInstances0(Class<?> klass, long tag, int maxInstances);
 	private static native boolean wasLoaded0();
+	private static native boolean initCallbacks0(Object callbackSite);
+	private static native void typeCardinality0(Class<?> targetClass, long tag, int maxInstances);
 	
 	
 	

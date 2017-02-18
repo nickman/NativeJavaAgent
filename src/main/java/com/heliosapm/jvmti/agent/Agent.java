@@ -21,16 +21,13 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import javax.management.ObjectName;
-
-import com.heliosapm.jvmti.util.SystemClock;
-import com.heliosapm.jvmti.util.SystemClock.ElapsedTime;
 
 
 /**
@@ -50,6 +47,8 @@ public class Agent implements AgentMBean {
 	public static final String ARRAY_IND = "[]";
 	/** Empty int[] arr placeholder */
 	public static int[] INT_ARR_PLACEHOLDER = {};
+	/** Empty long[] arr placeholder */
+	public static long[] LONG_ARR_PLACEHOLDER = {};
 	
 	private final NativeAgent nativeAgent;
 	
@@ -155,44 +154,66 @@ public class Agent implements AgentMBean {
        	
        	//agent.printClassCardinality(Object.class);
 		
-		final int TOPN = 100;		
-		log("Loaded:" + agent.isAgentBootLoaded());
-		int cnt = 0;
+//		final int TOPN = 100;		
+//		log("Loaded:" + agent.isAgentBootLoaded());
+//		int cnt = 0;
+//		for(int i = 0; i < 100; i++) {
+//			cnt += agent.getTopNInstanceCounts("java.lang.Object", TOPN, true).size();
+//			System.gc();
+//			cnt += agent.getTopNInstanceCounts(Object.class, TOPN, true).size();
+//			System.gc();
+//		}
+//		log("Cnt:" + cnt);
+//		
+//		System.gc();
+//		
+//		log("Total Objects Before:" + agent.getInstanceCountOfAny(Object.class));
+//		
+//		System.gc();
+//		
+//		final ElapsedTime et2 = SystemClock.startClock();
+//		final Map<Class<Object>, Long> map2 = agent.getTopNInstanceCounts(Object.class, TOPN, false);
+//		final long elapsed2 = et2.elapsed();
+//		final long count2 = map2.values().parallelStream().mapToLong(l -> l.longValue()).sum();
+//		log(ElapsedTime.printAvg("Examined Objects By Class", count2, elapsed2, TimeUnit.NANOSECONDS));
+//		
+//		System.gc();
+//
+//		final ElapsedTime et = SystemClock.startClock();
+//		final Map<String, Long> map = agent.getTopNInstanceCounts("java.lang.Object", TOPN, false);
+//		final long elapsed = et.elapsed();
+//		final long count = map.values().parallelStream().mapToLong(l -> l.longValue()).sum();
+//		log(ElapsedTime.printAvg("Examined Objects By ClassName", count, elapsed, TimeUnit.NANOSECONDS));
+		final int TOPN = 10;
+		int gtot = 0;
 		for(int i = 0; i < 100; i++) {
-			cnt += agent.getTopNInstanceCounts("java.lang.Object", TOPN, true).size();
-			System.gc();
-			cnt += agent.getTopNInstanceCounts(Object.class, TOPN, true).size();
+			gtot +=  agent.getTopNInstanceCounts(Object.class, TOPN, true).size();
+			gtot +=  agent.getTopNInstanceCounts(Object.class.getName(), TOPN, true).size();
 			System.gc();
 		}
-		log("Cnt:" + cnt);
 		
 		System.gc();
-		
-		log("Total Objects Before:" + agent.getInstanceCountOfAny(Object.class));
-		
+		//final Map<String, Long> map = agent.getTopNInstanceCounts("java.lang.Object", TOPN, true);
+		long start = System.currentTimeMillis();
+		final Map<Class<Object>, Long> map = agent.getTopNInstanceCounts(Object.class, TOPN, true);
+		long elapsed = System.currentTimeMillis() - start;
+		log("\n\t==========================\n\tTop %s\n\t==========================", TOPN);
+		for(Map.Entry<Class<Object>, Long> entry: map.entrySet()) {
+			log("%s  :  %s", entry.getKey().getName(), entry.getValue());
+		}
+		log("\n\t==========================");
+		log("Size:" + map.size() + ", elapsed:" + elapsed);
 		System.gc();
+		start = System.currentTimeMillis();
+		final Map<String, Long> map2 = agent.getTopNInstanceCounts(Object.class.getName(), TOPN, true);
+		elapsed = System.currentTimeMillis() - start;
+		log("\n\t==========================\n\tTop %s\n\t==========================", TOPN);
+		for(Map.Entry<String, Long> entry: map2.entrySet()) {
+			log("%s  :  %s", entry.getKey(), entry.getValue());
+		}
+		log("\n\t==========================");
+		log("Size:" + map.size() + ", elapsed:" + elapsed);
 		
-		final ElapsedTime et2 = SystemClock.startClock();
-		final Map<Class<Object>, Long> map2 = agent.getTopNInstanceCounts(Object.class, TOPN, false);
-		final long elapsed2 = et2.elapsed();
-		final long count2 = map2.values().parallelStream().mapToLong(l -> l.longValue()).sum();
-		log(ElapsedTime.printAvg("Examined Objects By Class", count2, elapsed2, TimeUnit.NANOSECONDS));
-		
-		System.gc();
-
-		final ElapsedTime et = SystemClock.startClock();
-		final Map<String, Long> map = agent.getTopNInstanceCounts("java.lang.Object", TOPN, false);
-		final long elapsed = et.elapsed();
-		final long count = map.values().parallelStream().mapToLong(l -> l.longValue()).sum();
-		log(ElapsedTime.printAvg("Examined Objects By ClassName", count, elapsed, TimeUnit.NANOSECONDS));
-
-		
-//		log("\n\t==========================\n\tTop %s\n\t==========================", TOPN);
-//		for(Map.Entry<String, Long> entry: map.entrySet()) {
-//			log("%s  :  %s", entry.getKey(), entry.getValue());
-//		}
-//		log("\n\t==========================");
-//		log("Size:" + map.size());
 //		SystemClock.sleep(999999999);
 //		int objArrayCount = agent.getExactInstanceCount("java.lang.Object[]");
 //		log("Object[] count: %s", objArrayCount);
@@ -263,6 +284,21 @@ public class Agent implements AgentMBean {
 			return true;
 		}
 	}; 
+	/** Predicate to filter out primtive types and arrays of primitive types */
+	public final Predicate<Map.Entry<Class<?>, long[]>> noPrimitiveEntrySetFilter = new Predicate<Map.Entry<Class<?>, long[]>>() {
+		@Override
+		public boolean test(final Entry<Class<?>, long[]> entry) {
+			final Class<?> fklazz = entry.getKey();
+			return !(fklazz.isPrimitive() || (fklazz.isArray() && getComponentClass(fklazz).isPrimitive()));
+		}
+	};
+	/** No Op Predicate class filter */
+	public final Predicate<Map.Entry<Class<?>, long[]>> noOpEntrySetFilter = new Predicate<Map.Entry<Class<?>, long[]>>() {
+		@Override
+		public boolean test(final Entry<Class<?>, long[]> entry) {
+			return true;
+		}
+	};
 	
 	
 	/**
@@ -272,22 +308,44 @@ public class Agent implements AgentMBean {
 	@Override
 	public LinkedHashMap<String, Long> getTopNInstanceCounts(final String className, final int n, final boolean excludePrims) {
 		if(className==null || className.trim().isEmpty()) throw new IllegalArgumentException("The passed class name was null or empty");
-		if(n<1) throw new IllegalArgumentException("Invalid max instances:" + n);
+		if(n<1) throw new IllegalArgumentException("Invalid max instances:" + n);		
+		final ConcurrentHashMap<String, long[]> mMap = new ConcurrentHashMap<String, long[]>(n > 8192 ? 8192 : n);
 		final LinkedHashMap<String, Long> topMap = new LinkedHashMap<String, Long>(n > 8192 ? 8192 : n);
-		resolveClass(className)
-			.parallelStream()			
-			.map(c -> getInstancesOfAny(c))
-			.flatMap(arr -> { 
-				return Arrays.stream(arr)
-					.parallel()					
-					.map(Object::getClass)
-					.filter(excludePrims ? noPrimitiveClassFilter : noOpClassFilter)
-					.map(k -> renderClassName(k));				
-			})
-			.collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
-			.entrySet().stream().sorted(EntryComparators.DESC_ENTRY_STR_LONG_COMP)
+		for(final Class<?> clazz: resolveClass(className)) {
+			nativeAgent.getInstanceCardinality(clazz).entrySet().parallelStream()
+				.forEach(entry -> {
+					if(!excludePrims || noPrimitiveClassFilter.test(entry.getKey())) {
+						final String key = renderClassName(entry.getKey());
+						long[] count = mMap.putIfAbsent(key, LONG_ARR_PLACEHOLDER);
+						if(count==null || count==LONG_ARR_PLACEHOLDER) {
+							mMap.replace(key, LONG_ARR_PLACEHOLDER, entry.getValue());
+						} else {
+							count[0] += entry.getValue()[0];
+						}
+					}
+				});
+		}
+		mMap.entrySet().stream()
+			.sorted(EntryComparators.DESC_ENTRY_LONGARR_COMP)
 			.limit(n)
-			.forEachOrdered(e -> topMap.put(e.getKey(), e.getValue()));
+			.forEach(entry -> {topMap.put(entry.getKey(), entry.getValue()[0]);});
+		
+		
+		
+//		resolveClass(className)
+//			.parallelStream()			
+//			.map(c -> getInstancesOfAny(c))
+//			.flatMap(arr -> { 
+//				return Arrays.stream(arr)
+//					.parallel()					
+//					.map(Object::getClass)
+//					.filter(excludePrims ? noPrimitiveClassFilter : noOpClassFilter)
+//					.map(k -> renderClassName(k));				
+//			})
+//			.collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
+//			.entrySet().stream().sorted(EntryComparators.DESC_ENTRY_STR_LONG_COMP)
+//			.limit(n)
+//			.forEachOrdered(e -> topMap.put(e.getKey(), e.getValue()));
 		return topMap;
 	}
 	
@@ -302,16 +360,24 @@ public class Agent implements AgentMBean {
 	public <T> LinkedHashMap<Class<T>, Long> getTopNInstanceCounts(final Class<T> clazz, final int n, final boolean excludePrims) {
 		if(clazz==null) throw new IllegalArgumentException("The passed class was null");
 		if(n<1) throw new IllegalArgumentException("Invalid max instances:" + n);
+		final Map<Class<?>, long[]> card = nativeAgent.getInstanceCardinality(clazz);
+		
 		final LinkedHashMap<Class<T>, Long> topMap = new LinkedHashMap<Class<T>, Long>(n > 8192 ? 8192 : n);
-		Arrays.stream(getInstancesOfAny(clazz))
-			.parallel()					
-			.map(Object::getClass)
-			.filter(excludePrims ? noPrimitiveClassFilter : noOpClassFilter)
-			.collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
-			.entrySet().stream().sorted(EntryComparators.DESC_ENTRY_LONG_COMP)
+		card.entrySet().parallelStream()
+			.filter(excludePrims ? noPrimitiveEntrySetFilter : noOpEntrySetFilter)
+			.sorted(EntryComparators.DESC_ENTRY_LONGARR_COMP)
 			.limit(n)
-			.forEachOrdered(e -> topMap.put((Class<T>) e.getKey(), e.getValue()));
+			.forEachOrdered(e -> topMap.put((Class<T>) e.getKey(), e.getValue()[0]));
 		return topMap;
+//		Arrays.stream(getInstancesOfAny(clazz))
+//			.parallel()					
+//			.map(Object::getClass)
+//			.filter(excludePrims ? noPrimitiveClassFilter : noOpClassFilter)
+//			.collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
+//			.entrySet().stream().sorted(EntryComparators.DESC_ENTRY_LONG_COMP)
+//			.limit(n)
+//			.forEachOrdered(e -> topMap.put((Class<T>) e.getKey(), e.getValue()));
+		
 	}
 	
 	

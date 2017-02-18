@@ -35,6 +35,15 @@ public class EntryComparators  {
 	public static final Comparator<? super Long> ASC_LONG_COMP = new TreeSet<Long>().comparator();
 	/** Descending Long comparator */
 	public static final Comparator<? super Long> DESC_LONG_COMP = Collections.reverseOrder(ASC_LONG_COMP);
+	
+	/** Descending long array comparator */
+	public static final Comparator<long[]> DESC_LONGARR_COMP = new Comparator<long[]>() {
+		@Override
+		public int compare(final long[] o1, final long[] o2) {
+			return DESC_LONG_COMP.compare(o1[0], o2[0]);
+		}
+	};
+	
 
 	/** Ascending String/Long entry set comparator */
 	public static final Comparator<Entry<String, Long>> ASC_ENTRY_STR_LONG_COMP = new AscendingLongEntryComparator<String>();
@@ -47,6 +56,10 @@ public class EntryComparators  {
 	
 	/** Wildcard key/long entry set comparator */
 	public static final Comparator<Entry<?, Long>> DESC_ENTRY_LONG_COMP = new WildcardDescendingLongEntryComparator();
+	
+	/** Wildcard key/long[] entry set comparator */
+	public static final Comparator<Entry<?, long[]>> DESC_ENTRY_LONGARR_COMP = new WildcardDescendingLongArrayEntryComparator();
+	
 	
 	
 	
@@ -138,6 +151,18 @@ public class EntryComparators  {
 			return DESC_LONG_COMP.compare(e1.getValue(), e2.getValue());
 		}		
 	}
+	
+	private static class WildcardDescendingLongArrayEntryComparator implements Comparator<Entry<?, long[]>> {
+		/**
+		 * {@inheritDoc}
+		 * @see java.util.Comparator#compare(java.lang.Object, java.lang.Object)
+		 */
+		@Override
+		public int compare(final Entry<?, long[]> e1, final Entry<?, long[]> e2) {
+			return DESC_LONGARR_COMP.compare(e1.getValue(), e2.getValue());
+		}		
+	}
+	
 	
 	
 	private EntryComparators(){}
