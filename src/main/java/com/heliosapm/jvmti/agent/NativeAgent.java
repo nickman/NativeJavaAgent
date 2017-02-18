@@ -25,9 +25,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.LongStream;
 
+import com.heliosapm.jvmti.util.SystemClock;
+import com.heliosapm.jvmti.util.SystemClock.ElapsedTime;
+import com.heliosapm.jvmti.util.TimerHistory;
 import com.heliosapm.shorthand.attach.vm.VirtualMachine;
 
 /**
@@ -66,6 +71,8 @@ public class NativeAgent {
 	public static final String DEV_DIR_PREFIX = "target/native/";
 	/** Class Cardinality counter map */
 	private final ConcurrentHashMap<Long, ConcurrentHashMap<Class<?>, long[]>> classCounter = new ConcurrentHashMap<Long, ConcurrentHashMap<Class<?>, long[]>>();
+	/** Class Cardinality timer map */
+	private final ConcurrentHashMap<Long, ElapsedTime> classCountTimer = new ConcurrentHashMap<Long, ElapsedTime>();
 	
 	/** long array place holder */
 	private static final long[] PLACEHOLDER = {}; 
@@ -75,6 +82,8 @@ public class NativeAgent {
 	private final AtomicLong tagSerial = new AtomicLong(0L);
 	/** The native library loaded */
 	private String libLocation = null;
+	/** The top n timer history */
+	private final TimerHistory topNTimerHistory = new TimerHistory(1000);
 
 	/**
 	 * Acquires the singleton NativeAgent instance
@@ -339,6 +348,7 @@ public class NativeAgent {
 		if(klazz==null) throw new IllegalArgumentException("The passed class was null");
 		final long tag = tagSerial.incrementAndGet();
 		classCounter.put(tag, new ConcurrentHashMap<Class<?>, long[]>());
+		classCountTimer.put(tag, SystemClock.startClock());
 		typeCardinality0(klazz, tag, Integer.MAX_VALUE);
 		return classCounter.remove(tag);
 	}
@@ -370,14 +380,17 @@ public class NativeAgent {
 	 * Callback from the native lib when {@link #typeCardinality0(Class, long, int)} is complete.
 	 * @param tag The tag used for object tagging
 	 */
-	public void complete(final long tag) {		
-//		final ConcurrentHashMap<Class<?>, long[]> map = classCounter.get(tag);
-//		log("Cardinality Count Complete. Size:" + map.size());
-//		for(Map.Entry<Class<?>, long[]> entry: map.entrySet()) {
-//			log(entry.getKey().getName() + ":" + entry.getValue()[0]);
-//		}
+	public void complete(final long tag) {
+		topNTimerHistory.add(classCountTimer.remove(tag).elapsed(TimeUnit.MILLISECONDS));
 	}
 	
+	/**
+	 * Returns the topn timer history
+	 * @return the topn timer history
+	 */
+	public TimerHistory topNTimerHistory() {
+		return topNTimerHistory;
+	}
 	
 	//============================================================================
 	//	Native JVMTI call wrappers

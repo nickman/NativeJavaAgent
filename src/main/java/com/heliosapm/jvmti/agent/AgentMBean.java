@@ -13,6 +13,7 @@
 package com.heliosapm.jvmti.agent;
 
 import java.util.LinkedHashMap;
+import java.util.LongSummaryStatistics;
 
 /**
  * <p>Title: AgentMBean</p>
@@ -64,5 +65,55 @@ public interface AgentMBean {
 	 */
 	public String getNativeLibrary();
 	
+	/**
+	 * Returns the total number of completed topN operations
+	 * @return the total number of completed topN operations
+	 * @see com.heliosapm.jvmti.util.TimerHistory#count()
+	 */
+	public long getTopNCount();
+
+	/**
+	 * Returns the average elapsed time of recent completed topN operations in ms.
+	 * @return the average elapsed time of recent completed topN operations
+	 * @see com.heliosapm.jvmti.util.TimerHistory#average()
+	 */
+	public double getTopNAverage();
+
+	/**
+	 * Returns the maximum elapsed time of recent completed topN operations in ms.
+	 * @return the maximum elapsed time of recent completed topN operations
+	 * @see com.heliosapm.jvmti.util.TimerHistory#max()
+	 */
+	public long getTopNMax();
+
+	/**
+	 * Returns the minimum elapsed time of recent completed topN operations in ms.
+	 * @return the minimum elapsed time of recent completed topN operations
+	 * @see com.heliosapm.jvmti.util.TimerHistory#min()
+	 */
+	public long getTopNMin();
+	
+	/**
+	 * Returns the elapsed time pf the most recent topN operation in ms.
+	 * @return the elapsed time pf the most recent topN operation
+	 * @see com.heliosapm.jvmti.util.TimerHistory#min()
+	 */
+	public long getTopNLast();
+	
+	/**
+	 * Returns combined statistics for recent topN operations 
+	 * @return combined statistics for recent topN operations 
+	 */
+	public LongSummaryStatistics getTopNStats();
+	
+	/**
+	 * Resets the timers but not the counters
+	 */
+	public void resetTimers();
+	
+	/**
+	 * Resets the timers and the counters
+	 */
+	public void resetTimersAll();
 	
 }

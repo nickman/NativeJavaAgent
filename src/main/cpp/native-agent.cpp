@@ -44,7 +44,7 @@ extern "C"
 JNICALL jvmtiIterationControl typeInstanceCountingCallback(jlong class_tag, jlong size, jlong* tag_ptr, void* user_data) {
     // *tag_ptr = 1;
     // return JVMTI_ITERATION_CONTINUE;
-
+  if(class_tag==0) return JVMTI_ITERATION_CONTINUE;
   TagContext* ctx = (TagContext*) user_data; 
   //printf("typeInstanceCountingCallback %d objects with tag\n", ctx->tagCount);
   if(ctx->tagMax!=0 && ctx->tagCount >= ctx->tagMax) {
@@ -75,22 +75,15 @@ JNIEXPORT void JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_typeCardinalit
     gdata->jvmti->AddCapabilities(&capabilities);
 
     gdata->jvmti->IterateOverInstancesOfClass(targetClass, JVMTI_HEAP_OBJECT_EITHER, &typeInstanceCountingCallback, ctx);
-    // cout << "Heap Iteration Complete" << endl;
     jobject* objArr;
     jlong* tagArr;
-
-    gdata->jvmti->GetObjectsWithTags(1, &tg, &ctx->tagCount, &objArr, &tagArr);
-    // cout << "Starting Object Callbacks:" << ctx->tagCount << endl;
     jvm->AttachCurrentThread((void **)&env, NULL);
-    // cout << "Thread attached" << endl;
+    gdata->jvmti->GetObjectsWithTags(1, &tg, &ctx->tagCount, &objArr, &tagArr);
     for (int n=0; n<ctx->tagCount; n++) {
-        //(*env)->CallVoidMethod(callbacksInstance, callbackIncrementMethod, tg, objArr[n]);
         env->CallVoidMethod(callbacksInstance, callbackIncrementMethod, tg, objArr[n]);
     }
-    //(*env)->CallVoidMethod(callbacksInstance, callbackCompleteMethod, tg);
     env->CallVoidMethod(callbacksInstance, callbackCompleteMethod, tg);
     jvm->DetachCurrentThread();
-    // cout << "Thread dettached" << endl;
     gdata->jvmti->Deallocate((unsigned char*)objArr);
     gdata->jvmti->Deallocate((unsigned char*)tagArr);
 }

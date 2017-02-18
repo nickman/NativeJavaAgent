@@ -20,6 +20,7 @@ import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LongSummaryStatistics;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -28,6 +29,8 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import javax.management.ObjectName;
+
+import com.heliosapm.jvmti.util.TimerHistory;
 
 
 /**
@@ -51,6 +54,7 @@ public class Agent implements AgentMBean {
 	public static long[] LONG_ARR_PLACEHOLDER = {};
 	
 	private final NativeAgent nativeAgent;
+	private final TimerHistory topNTimerHistory;
 	
 	
 	/**
@@ -75,6 +79,7 @@ public class Agent implements AgentMBean {
 	
 	private Agent() {
 		nativeAgent = NativeAgent.getInstance();
+		topNTimerHistory = nativeAgent.topNTimerHistory();
 		ObjectName objectName = null;
 		try {
 			objectName = new ObjectName(System.getProperty(AGENT_OBJECT_NAME_PROP, DEFAULT_AGENT_OBJECT_NAME));
@@ -591,6 +596,79 @@ public class Agent implements AgentMBean {
 	 */
 	public <T> T[] getInstancesOfAny(final Class<T> klass) {
 		return getInstancesOfAny(klass, Integer.MAX_VALUE);
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#getTopNLast()
+	 */
+	@Override
+	public long getTopNLast() {
+		return topNTimerHistory.last();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#getTopNCount()
+	 */
+	@Override
+	public long getTopNCount() {
+		return topNTimerHistory.count();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#getTopNAverage()
+	 */
+	@Override
+	public double getTopNAverage() {
+		return topNTimerHistory.average();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#getTopNMax()
+	 */
+	@Override
+	public long getTopNMax() {
+		return topNTimerHistory.max();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#getTopNMin()
+	 */
+	@Override
+	public long getTopNMin() {
+		return topNTimerHistory.min();
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#resetTimers()
+	 */
+	@Override
+	public void resetTimers() {
+		topNTimerHistory.reset();
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#getTopNStats()
+	 */
+	@Override
+	public LongSummaryStatistics getTopNStats() {
+		return topNTimerHistory.stats();
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#resetTimersAll()
+	 */
+	@Override
+	public void resetTimersAll() {
+		topNTimerHistory.resetAll();
+		
 	}
 	
 //	/**
