@@ -600,6 +600,29 @@ public class Agent implements AgentMBean {
 	
 	/**
 	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#invokeAgainstInstancesOf(java.lang.String, java.lang.String, int)
+	 */
+	@Override
+	public String invokeAgainstInstancesOf(String className, String fileName, int maxInstances) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.jvmti.agent.AgentMBean#invokeAgainstInstancesOfAny(java.lang.String, java.lang.String, int)
+	 */
+	@Override
+	public String invokeAgainstInstancesOfAny(String className, String fileName, int maxInstances) {
+		if(className==null || className.trim().isEmpty()) throw new IllegalArgumentException("The passed class name was null or empty");
+		if(fileName==null || fileName.trim().isEmpty()) throw new IllegalArgumentException("The passed file name was null or empty");
+		if(maxInstances<0) throw new IllegalArgumentException("Invalid maxInstances value [" + maxInstances + "]");
+		
+		return null;
+	}
+	
+	/**
+	 * {@inheritDoc}
 	 * @see com.heliosapm.jvmti.agent.AgentMBean#getTopNLast()
 	 */
 	@Override

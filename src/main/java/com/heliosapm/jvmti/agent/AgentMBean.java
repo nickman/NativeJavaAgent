@@ -42,6 +42,26 @@ public interface AgentMBean {
 	 */
 	public int getInstanceCountOf(final String className);
 	
+	/**
+	 * Acquires all instances of the named class and invokes the js in the passed file
+	 * against each one. The output is captured and returned.
+	 * @param className The class name of instances to acquire and invoke against
+	 * @param fileName The file to read the js from
+	 * @param maxInstances The maximum number of instances to acquire
+	 * @return the output
+	 */
+	public String invokeAgainstInstancesOf(final String className, final String fileName, final int maxInstances);
+	
+	/**
+	 * Acquires all instances of the named class or any inherriting/implementing from it
+	 * and invokes the js in the passed file
+	 * against each one. The output is captured and returned.
+	 * @param className The class name of instances to acquire and invoke against
+	 * @param fileName The file to read the js from
+	 * @param maxInstances The maximum number of instances to acquire
+	 * @return the output
+	 */
+	public String invokeAgainstInstancesOfAny(final String className, final String fileName, final int maxInstances);
 	
 	/**
 	 * Returns the top <code>N</code> classes by count
