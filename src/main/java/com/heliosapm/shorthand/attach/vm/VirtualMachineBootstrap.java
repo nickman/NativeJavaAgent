@@ -246,7 +246,7 @@ public class VirtualMachineBootstrap extends BaseWrappedClass {
 			}
 		}	
 		if(attachClassLoader.get()==null) {
-			throw new RuntimeException("Failed to find the Atach API. Please add tools.jar to the classpath", new Throwable());
+			throw new RuntimeException("Failed to find the Attach API. Please add tools.jar to the classpath", new Throwable());
 		}
 	}
 	

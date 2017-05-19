@@ -38,7 +38,7 @@ public class InstancesExample {
 		strings = null;  // Don't prevent gc of these objects !
 
 		CharSequence[] charSeqs = agent.getInstancesOfAny(CharSequence.class, 20);
-		for(int i = 10; i < 15; i++) {
+		for(int i = 10; i < charSeqs.length-1; i++) {
 			log("CharSequence#%s: Type:%s, Value:[%s]", i, charSeqs[i].getClass().getName(), charSeqs[i].toString());
 		}
 		charSeqs = null;

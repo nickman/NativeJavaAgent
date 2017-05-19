@@ -11,8 +11,9 @@
  - Find all classes by class name 
  
  
- Needed for linux 32:
+ Needed for linux build:
  	libc6-dev-i386
  	gcc-multilib 
  	g++-multilib
+ 	mingw-w64
   
