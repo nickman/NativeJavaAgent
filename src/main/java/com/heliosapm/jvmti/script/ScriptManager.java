@@ -43,7 +43,6 @@ public class ScriptManager {
 	/** A map of script engines keyed by the lower case extension */
 	private final ConcurrentHashMap<String, ScriptEngine> scriptEngines = new ConcurrentHashMap<String, ScriptEngine>(16); 
 	
-	private static final Pattern EXT_SPLITTER = Pattern.compile("\\.");
 	
 	class FileTs {
 		final File scriptFile;
@@ -54,8 +53,13 @@ public class ScriptManager {
 		FileTs(final String fileName) {			
 			scriptFile = new File(fileName);
 			timestamp = scriptFile.lastModified();
-			final String[] frags = EXT_SPLITTER.split(scriptFile.getName());
-			final String ext = frags[frags.length-1].toLowerCase();
+			final int index = fileName.lastIndexOf('.');
+			final String ext;
+			if(index==-1) {
+				ext = "js";
+			} else {
+				ext = fileName.substring(index+1);
+			}
 			se = scriptEngines.get(ext);
 			if(se==null) throw new RuntimeException("No script engine for file [" + fileName + "]");
 			compile();
@@ -74,10 +78,6 @@ public class ScriptManager {
 				try { fr.close(); } catch (Exception x) {/* No Op */}
 			}
 		}
-		
-		
-		
-		
 	}
 	
 	/**

@@ -21,6 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.LongStream;
 
+import com.heliosapm.jvmti.util.SystemClock.ElapsedTime;
+
 /**
  * <p>Title: TimerHistory</p>
  * <p>Description: A fixed size long time manager</p> 
@@ -183,10 +185,25 @@ public class TimerHistory {
 	
 	public static void main(String[] args) {
 		final ThreadLocalRandom r = ThreadLocalRandom.current();
+		final long[] samples = new long[1000];
+		for(int i = 0; i < 1000; i++) {
+			samples[i] = Math.abs(r.nextLong(1000));
+		}
 		final TimerHistory t = new TimerHistory(1000);
-		for(int i = 0; i < 5000; i++) {
+		for(int i = 0; i < 100000; i++) {
 			t.add(Math.abs(r.nextLong(1000)));
 		}
+		t.reset();
+		for(int i = 0; i < 1000; i++) {
+			t.add(samples[i]);
+		}
+		final ElapsedTime et = SystemClock.startClock();
+		for(int x = 0; x < 10; x++) {
+			for(int i = 0; i < 1000; i++) {
+				t.add(samples[i]);
+			}			
+		}
+		log(et.printAvg("Samples", 10000));
 		log("Average : %s", (long)t.stream().average().getAsDouble());
 		log("Distinct : %s", t.stream().distinct().toArray().length);
 		log("First : %s", t.stream().findFirst().getAsLong());
