@@ -227,7 +227,13 @@
 	      <version>${junit.version}</version>
 	      <scope>test</scope>
 	    </dependency>
+		<dependency>
+		  <groupId>com.heliosapm.utils</groupId>
+		  <artifactId>heliosutils</artifactId>
+		  <version>1.2</version>
+		</dependency>
 	  </dependencies>
+
 
 		  
 	  
