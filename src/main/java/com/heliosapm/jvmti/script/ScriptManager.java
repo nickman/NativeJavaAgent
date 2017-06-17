@@ -97,15 +97,15 @@ public class ScriptManager {
 	
 	private ScriptManager() {
 		sem = new ScriptEngineManager(getClass().getClassLoader());
-		sem.getEngineFactories().stream()
-			.forEach(sef -> {
-				final ScriptEngine se = sef.getScriptEngine();
-				if(se instanceof Compilable) {
-					sef.getExtensions().stream().forEach(ext -> {
-						scriptEngines.put(ext.toLowerCase(), se);
-					});
-				}
-			});
+//		sem.getEngineFactories().stream()
+//			.forEach(sef -> {
+//				final ScriptEngine se = sef.getScriptEngine();
+//				if(se instanceof Compilable) {
+//					sef.getExtensions().stream().forEach(ext -> {
+//						scriptEngines.put(ext.toLowerCase(), se);
+//					});
+//				}
+//			});
 	}
 	
 }
