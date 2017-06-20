@@ -11,6 +11,17 @@
  - Find all classes by class name 
  
  
+ XML Config:
+ 	JMXMP Listener
+ 	Hotspot MBeans
+ 	External Scripts Dir
+ 	Scripts to Load
+ 	Fixtures (e.g. MBeans for located thread pools + metrics)
+ 	External Native Lib Override
+ 	Detect native arch
+ 	Built in scripts
+ 	
+ 
  Needed for linux build:
  	libc6-dev-i386
  	gcc-multilib 
