@@ -17,6 +17,7 @@
     <junit.version>4.8.2</junit.version>
     <!-- Core dependencies -->
     <metrics.version>3.1.2</metrics.version>
+    <tinylog.version>1.2</tinylog.version>
 	<!-- Plugin Versions -->
 	<compiler-plugin.version>2.3.2</compiler-plugin.version>
 	<jar-plugin.version>2.3</jar-plugin.version>
@@ -165,8 +166,8 @@
 				  </manifest>
 				  <manifestEntries>
 			    		<Main-Class>com.heliosapm.jvmti.install.AgentInstaller</Main-Class> 
-			    		<Premain-Class>com.heliosapm.jvmti.install.JavaAgent</Premain-Class>
-		            	<Agent-Class>com.heliosapm.jvmti.install.JavaAgent</Agent-Class>
+			    		<Premain-Class>com.heliosapm.jvmti.install.JavaAgent2</Premain-Class>
+		            	<Agent-Class>com.heliosapm.jvmti.install.JavaAgent2</Agent-Class>
 		            	<Can-Redefine-Classes>true</Can-Redefine-Classes>
 		            	<Can-Retransform-Classes>true</Can-Retransform-Classes>
 		            	<Can-Set-Native-Method-Prefix>true</Can-Set-Native-Method-Prefix>				    
@@ -195,6 +196,10 @@
 	              		<relocation>
 	              			<pattern>io.netty</pattern>
 	              			<shadedPattern>helios.netty</shadedPattern>
+	              		</relocation>
+	              		<relocation>
+	              			<pattern>org.pmw</pattern>
+	              			<shadedPattern>helios.pmw</shadedPattern>
 	              		</relocation>
 	              		
 	              	</relocations>
@@ -257,6 +262,12 @@
        			</exclusion>		        
             </exclusions>
         </dependency>
+		<dependency>
+		  <groupId>org.tinylog</groupId>
+		  <artifactId>tinylog</artifactId>
+		  <version>${tinylog.version}</version>
+		</dependency>
+        
 		
 	  </dependencies>
 

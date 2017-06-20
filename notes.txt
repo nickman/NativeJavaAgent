@@ -20,6 +20,9 @@
  	External Native Lib Override
  	Detect native arch
  	Built in scripts
+ 	External Logging Config (first ?)
+ 	Set sysprops
+ 	
  	
  
  Needed for linux build:
