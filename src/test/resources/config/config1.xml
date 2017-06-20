@@ -1,0 +1,17 @@
+<agent>
+	<jmxmp iface="127.0.0.1" port="1829" />
+	<hotspotmbeans/>
+	<!--  <native ext=""/>  -->
+</agent>
+
+
+<!-- 
+	JMXMP Listener
+ 	Hotspot MBeans
+ 	External Scripts Dir
+ 	Scripts to Load
+ 	Fixtures (e.g. MBeans for located thread pools + metrics)
+ 	External Native Lib Override
+ 	Detect native arch
+ 	Built in scripts 	
+ -->
