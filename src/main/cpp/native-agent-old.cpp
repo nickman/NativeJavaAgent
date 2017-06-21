@@ -5,35 +5,6 @@
 #include <cstring>
 
 
-
-/*
-
-      +-------------------------------------------------------------------------------------------------------+
-      |XXXXXXXXXXXXXXXXXXXXXXXXXXX| Exact Type                     || Inherrited                              |
-      +-------------------------------------------------------------------------------------------------------+
-      |                          || countExactInstances0           || countInstances0                         |
-      | Count Instances          || objectCountingCallback         || typeInstanceCountingCallback            |   
-      |                          ||                                ||                                         |
-      +-------------------------------------------------------------------------------------------------------+
-      |                          ||XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX|| typeCardinality0                        |
-      | Type Cardinality         ||XXX Same as count exact  XXXXXXX|| typeInstanceCountingCallback            |
-      |                          ||XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX||                                         |
-      +-------------------------------------------------------------------------------------------------------+
-      |                          || getExactInstances0             || getInstances0                           |
-      | Get Instances (for Arr)  || objectTaggingCallback    --->  || typeInstanceCountingCallback            |    // Inherrited can use object tagging
-      |                          ||                                ||                                         |
-      +-------------------------------------------------------------------------------------------------------+
-      |                          || queueExactInstances0           || queueInstances0                         |    //  ASYNC !
-      | Get Instances (Queue)    || objectTaggingCallback          || objectTaggingCallback                   |
-      |                          ||                                ||                                         |
-      +-------------------------------------------------------------------------------------------------------+
-
-      * Object Size Support
-      
-*/      
-
-
-
  
 using namespace std;
  
@@ -55,32 +26,17 @@ static bool onLoad;
 static jobject callbacksInstance;
 static jmethodID callbackIncrementMethod;
 static jmethodID callbackCompleteMethod;
-static jmethodID queueAddMethod;
-static jclass queueClazz;
 static JavaVM *jvm;
 
 
 extern "C"
-JNIEXPORT jboolean JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_initCallbacks0(JNIEnv *env, jclass thisClass, jobject callbackSite, jclass queueClass) {    
+JNIEXPORT jboolean JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_initCallbacks0(JNIEnv *env, jclass thisClass, jobject callbackSite) {    
   env->GetJavaVM(&jvm);
   callbacksInstance = env->NewGlobalRef(callbackSite);
   callbackIncrementMethod = env->GetMethodID(thisClass, "increment", "(JLjava/lang/Object;)V");
   callbackCompleteMethod = env->GetMethodID(thisClass, "complete", "(J)V");
-  queueClazz = env->FindClass("java/util/Queue");
-  queueAddMethod = env->GetMethodID(queueClazz, "add", "(Ljava/lang/Object;)Z");
-  
-//    jclass (JNICALL *FindClass)
-//      (JNIEnv *env, const char *name);
-  
-//   jmethodID (JNICALL *GetMethodID)
-//      (JNIEnv *env, jclass clazz, const char *name, const char *sig);
-
-
-
-  
   cout << "Callback increment method:" << callbacksInstance << "->" << callbackIncrementMethod << endl;
   cout << "Callback complete method:" << callbacksInstance << "->" << callbackCompleteMethod << endl;
-  cout << "Queue add method:" << queueClazz << "->" << queueAddMethod << endl;
   return true;
 }
 

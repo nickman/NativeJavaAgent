@@ -24,11 +24,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.LongStream;
+import java.util.stream.Stream;
+
+import org.jctools.maps.NonBlockingHashMap;
+import org.jctools.maps.NonBlockingHashMapLong;
+import org.jctools.queues.SpscGrowableArrayQueue;
+import org.pmw.tinylog.Logger;
 
 import com.heliosapm.jvmti.util.SystemClock;
 import com.heliosapm.jvmti.util.SystemClock.ElapsedTime;
@@ -55,6 +59,8 @@ public class NativeAgent {
 			Collections.unmodifiableSet(new HashSet<String>(Arrays.asList("-agentpath:", "-agentlib:", "-javaagent:")));
 	/** The agent native lib name */
 	public static final String LIB_NAME = "oif_agent";
+	/** The number of cores */
+	public static final int CORES = ManagementFactory.getOperatingSystemMXBean().getAvailableProcessors();
 	/** The system property override defining the absolute location of the oif agent library to load */
 	public static final String CONFIG_AGENT_LOCATION = "com.heliosapm.jvmti.lib";
 	/** The system property override to suppress the deleteOnExit on the jar extracted lib. Just set, no value needed. */
@@ -70,16 +76,16 @@ public class NativeAgent {
 	/** The directory prefix when loading the default lib in dev mode */
 	public static final String DEV_DIR_PREFIX = "target/native/";
 	/** Class Cardinality counter map */
-	private final ConcurrentHashMap<Long, ConcurrentHashMap<Class<?>, long[]>> classCounter = new ConcurrentHashMap<Long, ConcurrentHashMap<Class<?>, long[]>>();
+	private final NonBlockingHashMapLong<NonBlockingHashMap<Class<?>, long[]>> classCounter = new NonBlockingHashMapLong<NonBlockingHashMap<Class<?>, long[]>>(CORES, true);
 	/** Class Cardinality timer map */
-	private final ConcurrentHashMap<Long, ElapsedTime> classCountTimer = new ConcurrentHashMap<Long, ElapsedTime>();
+	private final NonBlockingHashMapLong<ElapsedTime> classCountTimer = new NonBlockingHashMapLong<ElapsedTime>(CORES, true);
 	
 	/** long array place holder */
 	private static final long[] PLACEHOLDER = {}; 
 	
 	
 	/** The tag serial */
-	private final AtomicLong tagSerial = new AtomicLong(0L);
+	private final AtomicLong tagSerial = new AtomicLong(1L);
 	/** The native library loaded */
 	private String libLocation = null;
 	/** The top n timer history */
@@ -117,16 +123,20 @@ public class NativeAgent {
 		final String arch = System.getProperty("sun.arch.data.model");
 		if(os.contains("linux")) {
 			if(arch.equals("64")) {
+				Logger.info("Loading native library for Linux/64");
 				return "linux64/liboifagent.so";
 			} else if(arch.equals("32")) {
+				Logger.info("Loading native library for Linux/32");
 				return "linux32/liboifagent.so";
 			} else {
 				throw new RuntimeException("Linux arch Not Supported: [" + arch + "]");
 			}
 		} else if(os.contains("windows")) {
 			if(arch.equals("64")) {
+				Logger.info("Loading native library for Windows/64");
 				return "win64/oifagent.dll";
 			} else if(arch.equals("32")) {
+				Logger.info("Loading native library for Windows/32");
 				return "win32/oifagent.dll";
 			} else {
 				throw new RuntimeException("Windows arch Not Supported: [" + arch + "]");
@@ -156,13 +166,14 @@ public class NativeAgent {
 					if(isJar) {
 						libToLoad = unloadLibFromJar().getAbsolutePath();
 					} else {
-						libToLoad = "./target/native/" + libDir();
+						libToLoad = "./target/native/native/" + libDir();
 					}
 				}
 				loadLibFromFile(libToLoad);
 				libLocation = libToLoad;
 				initCallbacks0(this);
 				System.setProperty(AGENT_INSTALLED_PROP, "true");
+				Logger.info("Loaded native library [{}]", libLocation);
 			} catch (Throwable t) {
 				nativeLoaded.set(false);	
 				t.printStackTrace(System.err);
@@ -272,7 +283,11 @@ public class NativeAgent {
 		return false;
 	}
 	
-	
+	protected <T> Stream<T> streamResults(final int maxSize) {
+		final SpscGrowableArrayQueue<T> spscQ = new SpscGrowableArrayQueue<T>(128, maxSize);
+		return spscQ.stream();
+		
+	}
 
 	/**
 	 * Returns the name and location of the native library
@@ -329,14 +344,9 @@ public class NativeAgent {
 		return !(Modifier.isInterface(mods) || Modifier.isAbstract(mods));
 	}
 	
-	public static void log(Object fmt, Object...args) {
-		System.out.println(String.format(fmt.toString(), args));
-	}
-
-	
 	
 	public void countCallback(final Class<?> clazz) {
-		log("Instance Found:" + clazz.getName());
+		Logger.info("Instance Found: [{}]", clazz.getName());
 	}
 	
 	/**
@@ -347,7 +357,7 @@ public class NativeAgent {
 	public Map<Class<?>, long[]> getInstanceCardinality(final Class<?> klazz) {
 		if(klazz==null) throw new IllegalArgumentException("The passed class was null");
 		final long tag = tagSerial.incrementAndGet();
-		classCounter.put(tag, new ConcurrentHashMap<Class<?>, long[]>());
+		classCounter.put(tag, new NonBlockingHashMap<Class<?>, long[]>());
 		classCountTimer.put(tag, SystemClock.startClock());
 		typeCardinality0(klazz, tag, Integer.MAX_VALUE);
 		return classCounter.remove(tag);
@@ -366,7 +376,7 @@ public class NativeAgent {
 	public void increment(final long tag, final Object obj) {
 		if(obj==null) return;
 		final Class<?> clazz = obj.getClass();
-		final ConcurrentHashMap<Class<?>, long[]> map = classCounter.get(tag);
+		final NonBlockingHashMap<Class<?>, long[]> map = classCounter.get(tag);
 		long[] counter = map.putIfAbsent(clazz, PLACEHOLDER);
 		if(counter==null || counter==PLACEHOLDER) {
 			counter = new long[]{1L};
@@ -381,7 +391,10 @@ public class NativeAgent {
 	 * @param tag The tag used for object tagging
 	 */
 	public void complete(final long tag) {
-		topNTimerHistory.add(classCountTimer.remove(tag).elapsed(TimeUnit.MILLISECONDS));
+		final ElapsedTime et = classCountTimer.get(tag);
+		if(et!=null) {
+			topNTimerHistory.add(et.elapsed(TimeUnit.MILLISECONDS));
+		}
 	}
 	
 	/**
@@ -457,15 +470,33 @@ public class NativeAgent {
 		return (T[])getInstances0(anyType, tagSerial.incrementAndGet(), maxInstances);		
 	}
 	
+	public Map<Class<?>, long[]> typeCardinality(final Class<?> type, final long tag, final int maxInstances) {
+		//topNTimerHistory.add(classCountTimer.remove(tag).elapsed(TimeUnit.MILLISECONDS));
+		classCountTimer.put(tag, SystemClock.startClock());
+		classCounter.put(tag, new NonBlockingHashMap<Class<?>, long[]>());
+		int types = 0;
+		try {
+			typeCardinality0(type, tag, maxInstances);
+			Map<Class<?>, long[]> counts = classCounter.remove(tag);
+			types = counts.size();
+			return counts;
+		} finally {
+			ElapsedTime et = classCountTimer.remove(tag);
+			if(et!=null) Logger.info("Elapsed: {}", et.printAvg("Per Type", types));
+			classCounter.remove(tag);
+		}
+	}
+	
 	public static void main(String[] args) {
-		log("Initializing....");
+		Logger.info("Initializing....");
 		final NativeAgent na = getInstance();
-		log("Initialized.");
+		Logger.info("Initialized.");
 		final long tag = na.tagSerial.incrementAndGet();
-		na.classCounter.put(tag, new ConcurrentHashMap<Class<?>, long[]>());
+		na.classCounter.put(tag, new NonBlockingHashMap<Class<?>, long[]>());
 		final long start = System.currentTimeMillis();
-		typeCardinality0(Object.class, tag, Integer.MAX_VALUE);
-		log("Elapsed:" + (System.currentTimeMillis() - start));
+		Map<Class<?>, long[]> counts = na.typeCardinality(Object.class, tag, Integer.MAX_VALUE);
+		Logger.info("Elapsed: {} ms.", (System.currentTimeMillis() - start));
+		
 	}
 	
 
@@ -479,6 +510,7 @@ public class NativeAgent {
 	private static native boolean wasLoaded0();
 	private static native boolean initCallbacks0(Object callbackSite);
 	private static native void typeCardinality0(Class<?> targetClass, long tag, int maxInstances);
+	
 	
 	
 	
