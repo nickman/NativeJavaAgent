@@ -45,7 +45,9 @@ typedef struct {
  int tagCount;
  int tagMax;
  jlong* tag;
+ jlong tsize;
 } TagContext;
+
 
  
 static GlobalAgentData *gdata;
