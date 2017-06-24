@@ -29,6 +29,8 @@
       +-------------------------------------------------------------------------------------------------------+
 
       * Object Size Support
+      * get class id
+      * get method id
       
 */      
 
@@ -36,7 +38,10 @@
 
  
 using namespace std;
- 
+
+static const jlong CLEAR_TAG = 0x00000000;
+
+
 typedef struct {
  jvmtiEnv *jvmti;
 } GlobalAgentData;
@@ -46,6 +51,7 @@ typedef struct {
  int tagMax;
  jlong* tag;
  jlong tsize;
+ jobject* queue;
 } TagContext;
 
 
@@ -59,27 +65,19 @@ static jmethodID callbackIncrementMethod;
 static jmethodID callbackCompleteMethod;
 static jmethodID queueAddMethod;
 static jclass queueClazz;
+static jobject eoq;
 static JavaVM *jvm;
 
 
 extern "C"
-JNIEXPORT jboolean JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_initCallbacks0(JNIEnv *env, jclass thisClass, jobject callbackSite, jclass queueClass) {    
+JNIEXPORT jboolean JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_initCallbacks0(JNIEnv *env, jclass thisClass, jobject callbackSite, jclass queueClass, jobject endOfQueue) {    
   env->GetJavaVM(&jvm);
   callbacksInstance = env->NewGlobalRef(callbackSite);
   callbackIncrementMethod = env->GetMethodID(thisClass, "increment", "(JLjava/lang/Object;)V");
   callbackCompleteMethod = env->GetMethodID(thisClass, "complete", "(J)V");
-  queueClazz = env->FindClass("java/util/Queue");
-  queueAddMethod = env->GetMethodID(queueClazz, "add", "(Ljava/lang/Object;)Z");
-  
-//    jclass (JNICALL *FindClass)
-//      (JNIEnv *env, const char *name);
-  
-//   jmethodID (JNICALL *GetMethodID)
-//      (JNIEnv *env, jclass clazz, const char *name, const char *sig);
-
-
-
-  
+  queueClazz = queueClass;
+  eoq = env->NewGlobalRef(endOfQueue);
+  queueAddMethod = env->GetMethodID(queueClazz, "offer", "(Ljava/lang/Object;)Z");
   cout << "Callback increment method:" << callbacksInstance << "->" << callbackIncrementMethod << endl;
   cout << "Callback complete method:" << callbacksInstance << "->" << callbackCompleteMethod << endl;
   cout << "Queue add method:" << queueClazz << "->" << queueAddMethod << endl;
@@ -99,6 +97,10 @@ JNICALL jvmtiIterationControl typeInstanceCountingCallback(jlong class_tag, jlon
 }
 
 
+
+
+  // jobject* queue;
+  // env->CallVoidMethod(callbacksInstance, callbackIncrementMethod, tg, objArr[n]);
   // public void complete(final long tag) {
   // public void increment(final long tag, final Object obj) {
 
@@ -246,7 +248,7 @@ extern "C"
 JNICALL jint objectTaggingCallback(jlong class_tag, jlong size, jlong* tag_ptr, jint length, void* user_data) {
   TagContext* ctx = (TagContext*) user_data; 
   if(ctx->tagMax!=0 && ctx->tagCount >= ctx->tagMax) {
-    cout << "Aborting Instance Tagging after " << ctx->tagCount << " Instances" << endl;
+    //cout << "Aborting Instance Tagging after " << ctx->tagCount << " Instances for tag [" << *ctx->tag << "]" << endl;
     return JVMTI_VISIT_ABORT;
   }
   ctx->tagCount++;
@@ -279,6 +281,31 @@ JNIEXPORT jobjectArray  JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_getEx
   gdata->jvmti->Deallocate((unsigned char*)tagArr);
   return ret; 
 }
+
+extern "C"
+JNIEXPORT int  JNICALL Java_com_heliosapm_jvmti_agent_NativeAgent_queueExactInstances0(JNIEnv *env, jclass thisClass, jclass klass, jlong tag, jint max, jobject queue) {
+  jvmtiHeapCallbacks callbacks;
+  (void)memset(&callbacks, 0, sizeof(callbacks));
+  callbacks.heap_iteration_callback = &objectTaggingCallback;  
+  TagContext* ctx = new TagContext();
+  ctx->tagCount = 0;
+  ctx->tagMax = max;
+  ctx->tag = &tag;
+  gdata->jvmti->IterateThroughHeap(0, klass, &callbacks, ctx);
+  jobject* objArr;
+  jlong* tagArr;
+  gdata->jvmti->GetObjectsWithTags(1, &tag, &ctx->tagCount, &objArr, &tagArr);  
+//  cout << "Enqueueing [" <<  ctx->tagCount << "] objects for tag [" << tag << "]" << endl;
+  for (int n=0; n<ctx->tagCount; n++) {
+    env->CallBooleanMethod(queue, queueAddMethod, objArr[n]);
+  }
+  bool complete = env->CallBooleanMethod(queue, queueAddMethod, eoq);
+//  cout << "Queue Complete:" << complete << ", EOQ:" << eoq << endl;
+  gdata->jvmti->Deallocate((unsigned char*)objArr);
+  gdata->jvmti->Deallocate((unsigned char*)tagArr);
+  return ctx->tagCount; 
+}
+
 
 
 extern "C"

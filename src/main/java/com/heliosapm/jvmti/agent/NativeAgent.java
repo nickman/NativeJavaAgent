@@ -19,14 +19,21 @@ import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import org.jctools.maps.NonBlockingHashMap;
@@ -80,8 +87,13 @@ public class NativeAgent {
 	/** Class Cardinality timer map */
 	private final NonBlockingHashMapLong<ElapsedTime> classCountTimer = new NonBlockingHashMapLong<ElapsedTime>(CORES, true);
 	
+	/** Thread pool to dispatch queued response native JVMTI calls */
+	private final ExecutorService threadPool =  Executors.newWorkStealingPool(CORES);
+	
 	/** long array place holder */
 	private static final long[] PLACEHOLDER = {}; 
+	
+	private static final EOQ END_OF_QUEUE = new EOQ();
 	
 	
 	/** The tag serial */
@@ -171,7 +183,7 @@ public class NativeAgent {
 				}
 				loadLibFromFile(libToLoad);
 				libLocation = libToLoad;
-				initCallbacks0(this);
+				initCallbacks0(this, SpscGrowableArrayQueue.class, END_OF_QUEUE);
 				System.setProperty(AGENT_INSTALLED_PROP, "true");
 				Logger.info("Loaded native library [{}]", libLocation);
 			} catch (Throwable t) {
@@ -285,6 +297,7 @@ public class NativeAgent {
 	
 	protected <T> Stream<T> streamResults(final int maxSize) {
 		final SpscGrowableArrayQueue<T> spscQ = new SpscGrowableArrayQueue<T>(128, maxSize);
+		spscQ.offer(null);
 		return spscQ.stream();
 		
 	}
@@ -452,10 +465,51 @@ public class NativeAgent {
 	 * @return an array of objects found in the heap
 	 */
 	@SuppressWarnings("unchecked")
-	public <T> T[] getInstancesOf(final Class<?> exactType, final int maxInstances) {
+	public <T> T[] getInstancesOf(final Class<T> exactType, final int maxInstances) {
 		if(exactType==null) throw new IllegalArgumentException("The passed class was null");
 		if(!isConcrete(exactType)) return (T[])EMPTY_ARR;
 		return (T[])getExactInstances0(exactType, tagSerial.incrementAndGet(), maxInstances);		
+	}
+	
+	protected <T> Queue<T> queueInstancesOf(final Class<T> exactType, final int maxInstances) {
+		if(exactType==null) throw new IllegalArgumentException("The passed class was null");		
+		if(!isConcrete(exactType)) return (Queue<T>)EMPTY_QUEUE;
+		final SpscGrowableArrayQueue<Object> queue = new SpscGrowableArrayQueue<Object>(nextPowerOf2(maxInstances + 1));
+		threadPool.submit(new Runnable(){
+			public void run() {
+				queueExactInstances0(exactType, tagSerial.incrementAndGet(), maxInstances, queue);
+			}
+		});		
+		return (Queue<T>)queue;		
+	}
+	
+	public <T> void instancesOf(final Class<T> exactType, final int maxInstances, final Consumer<T> consumer) {
+		final Queue<T> q = queueInstancesOf(exactType, maxInstances);
+		final int breakOn = maxInstances + 1;
+		try {
+			Object x = null;
+			int c = 0;
+			while(true) {
+				x = q.poll();
+				if(x==null) continue;
+				if(x==END_OF_QUEUE) {
+					break;
+				}
+				c++;
+				if(c > maxInstances) break;
+				consumer.accept((T)x);
+			}
+		} catch (Exception ex) {
+			ex.printStackTrace(System.err);
+		}		
+		
+	}
+	
+	private static native <T> int queueExactInstances0(Class<?> klass, long tag, int maxInstances, SpscGrowableArrayQueue<T> queue);
+	private static final ConstQueue<Object> EMPTY_QUEUE = new ConstQueue<Object>();
+	
+	public static int nextPowerOf2(final int i) {
+		return Math.max(1, Integer.highestOneBit(i - 1) << 1);
 	}
 	
 	/**
@@ -496,7 +550,19 @@ public class NativeAgent {
 		final long start = System.currentTimeMillis();
 		Map<Class<?>, long[]> counts = na.typeCardinality(Object.class, tag, Integer.MAX_VALUE);
 		Logger.info("Elapsed: {} ms.", (System.currentTimeMillis() - start));
-		
+		final LongAdder cnt = new LongAdder();
+		for(int i = 0; i < 100; i++) {
+			na.instancesOf(String.class, 1000, a -> {
+				cnt.increment();
+			});
+			cnt.reset();
+		}
+		cnt.reset();
+		final ElapsedTime et = SystemClock.startClock();
+		na.instancesOf(Object.class, 1000, a -> {
+			cnt.increment();
+		});
+		Logger.info("Counted {} objects in {} ms.", cnt.sum(), et.elapsedMs());
 	}
 	
 
@@ -506,12 +572,167 @@ public class NativeAgent {
 	private static native int countExactInstances0(Class<?> klass, long tag, int maxInstances);	
 	private static native int countInstances0(Class<?> klass, long tag, int maxInstances);
 	private static native Object[] getExactInstances0(Class<?> klass, long tag, int maxInstances);
+//	private static native int queueExactInstances0(Class<?> klass, long tag, int maxInstances, SpscGrowableArrayQueue<Object> queue);
 	private static native Object[] getInstances0(Class<?> klass, long tag, int maxInstances);
 	private static native boolean wasLoaded0();
-	private static native boolean initCallbacks0(Object callbackSite);
+	private static native boolean initCallbacks0(Object callbackSite, Class<SpscGrowableArrayQueue> queueClazz, Object endOfQueue);
 	private static native void typeCardinality0(Class<?> targetClass, long tag, int maxInstances);
 	
 	
+	private static class EOQ {
+		@Override
+		public String toString() {
+			return "{END-OF-QUEUE}";
+		}
+	}
+	
+	private static class ConstQueue<T> implements Queue<T> {
+		private final Set<T> emptySet = Collections.unmodifiableSet(new HashSet<T>(0));
+
+		/* (non-Javadoc)
+		 * @see java.util.Collection#size()
+		 */
+		@Override
+		public int size() {
+			return 0;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Collection#isEmpty()
+		 */
+		@Override
+		public boolean isEmpty() {
+			return true;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Collection#contains(java.lang.Object)
+		 */
+		@Override
+		public boolean contains(Object o) {
+			return false;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Collection#iterator()
+		 */
+		@Override
+		public Iterator<T> iterator() {
+			return emptySet.iterator();
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Collection#toArray()
+		 */
+		@Override
+		public Object[] toArray() {
+			return EMPTY_ARR;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Collection#toArray(java.lang.Object[])
+		 */
+		@Override
+		public <T> T[] toArray(T[] a) {
+			return (T[])EMPTY_ARR;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Collection#remove(java.lang.Object)
+		 */
+		@Override
+		public boolean remove(Object o) {
+			return false;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Collection#containsAll(java.util.Collection)
+		 */
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			return false;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Collection#addAll(java.util.Collection)
+		 */
+		@Override
+		public boolean addAll(Collection<? extends T> c) {
+			return false;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Collection#removeAll(java.util.Collection)
+		 */
+		@Override
+		public boolean removeAll(Collection<?> c) {
+			return false;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Collection#retainAll(java.util.Collection)
+		 */
+		@Override
+		public boolean retainAll(Collection<?> c) {
+			return false;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Collection#clear()
+		 */
+		@Override
+		public void clear() {
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Queue#add(java.lang.Object)
+		 */
+		@Override
+		public boolean add(T e) {
+			return false;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Queue#offer(java.lang.Object)
+		 */
+		@Override
+		public boolean offer(T e) {
+			return false;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Queue#remove()
+		 */
+		@Override
+		public T remove() {
+			return null;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Queue#poll()
+		 */
+		@Override
+		public T poll() {
+			return null;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Queue#element()
+		 */
+		@Override
+		public T element() {
+			return null;
+		}
+
+		/* (non-Javadoc)
+		 * @see java.util.Queue#peek()
+		 */
+		@Override
+		public T peek() {
+			return null;
+		}
+		
+	}
 	
 	
 }
