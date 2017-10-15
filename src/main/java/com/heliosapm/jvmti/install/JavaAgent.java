@@ -82,7 +82,7 @@ public class JavaAgent {
 	private static void externalLoggingConfig() {
 		Node node = XMLHelper.getChildNodeByName(rootConfigNode, "logging");
 		String externalConfig = XMLHelper.getAttributeByName(node, "config", null);
-		if(URLHelper.resolves(externalConfig)) {
+		if(URLHelper.resolves(URLHelper.toURL(externalConfig))) {
 			try {
 				URL configUrl = URLHelper.toURL(externalConfig);
 				Configurator.fromURL(configUrl);

@@ -178,7 +178,7 @@ public class NativeAgent {
 					if(isJar) {
 						libToLoad = unloadLibFromJar().getAbsolutePath();
 					} else {
-						libToLoad = "./target/native/native/" + libDir();
+						libToLoad = "./target/native/" + libDir();
 					}
 				}
 				loadLibFromFile(libToLoad);

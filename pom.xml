@@ -18,7 +18,8 @@
     <!-- Core dependencies -->
     <metrics.version>3.1.2</metrics.version>
     <tinylog.version>1.2</tinylog.version>
-    <utils.version>1.3-SNAPSHOT</utils.version>
+    <!-- <utils.version>1.3-SNAPSHOT</utils.version> -->
+    <utils.version>1.2</utils.version>
     <jctools.version>2.0.2</jctools.version>
 	<!-- Plugin Versions -->
 	<compiler-plugin.version>2.3.2</compiler-plugin.version>

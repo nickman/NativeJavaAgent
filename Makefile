@@ -16,7 +16,7 @@ LDFLAGS      = -shared
 
 DEBUGFLAGS   = -O0 -D _DEBUG
 RELEASEFLAGS = -O2 -D NDEBUG -combine -fwhole-program
-#INCLUDES = -I $(JAVA_HOME)/include -I $(JAVA_HOME)/include/linux
+INCLUDES = -I $(JAVA_HOME)/include -I $(JAVA_HOME)/include/linux
 DISTDIR = ./target/native
 L64TARGET  = -o ${DISTDIR}/linux64/liboifagent.so
 L32TARGET  = -o ${DISTDIR}/linux32/liboifagent.so
