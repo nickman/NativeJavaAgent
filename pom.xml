@@ -168,8 +168,8 @@
 				      <addClasspath>true</addClasspath>
 				  </manifest>
 				  <manifestEntries>
-			    		<!-- <Main-Class>com.heliosapm.jvmti.install.AgentInstaller</Main-Class> -->
-			    		<Main-Class>com.heliosapm.jvmti.install.JavaAgent</Main-Class> 
+			    		<Main-Class>com.heliosapm.jvmti.install.AgentInstaller</Main-Class>
+			    		<!-- <Main-Class>com.heliosapm.jvmti.install.JavaAgent</Main-Class> --> 
 			    		
 			    		<Premain-Class>com.heliosapm.jvmti.install.JavaAgent2</Premain-Class>
 		            	<Agent-Class>com.heliosapm.jvmti.install.JavaAgent2</Agent-Class>
