@@ -1,3 +1,13 @@
 <agent>
 	<logging config="/home/nwhitehead/hprojects/NativeJavaAgent/src/main/resources/tinylog.properties"/>
+	<extensions>
+		<extension>com.heliosapm.jvmti.extension.impls.DirectByteBufferAllocations</extension>
+		<extension>com.heliosapm.jvmti.extension.impls.HotspotExtension</extension>
+		<extension>com.heliosapm.jvmti.extension.impls.thread.ThreadPoolMonitor</extension>
+	</extensions>
+	<jmxmp>
+		<port>${jmxmp.port:2071}</port>
+		<iface>0.0.0.0</iface>
+	</jmxmp>
+	<extendedtm/>
 </agent>

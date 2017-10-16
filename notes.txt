@@ -12,6 +12,7 @@
  
  
  XML Config:
+ 	External Config
  	JMXMP Listener
  	Hotspot MBeans
  	External Scripts Dir
@@ -23,6 +24,12 @@
  	External Logging Config (first ?)
  	Set sysprops
  	
+Extensions:
+	Interface / Abstract Base
+	Scheduler
+	ThreadPools - Counts, Active, Thread Stats
+	NIO Buffers - By type, Counts, Total Allocation
+	Sockets
  	
  
  Needed for linux build:

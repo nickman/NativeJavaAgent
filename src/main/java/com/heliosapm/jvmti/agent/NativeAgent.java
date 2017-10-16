@@ -471,13 +471,13 @@ public class NativeAgent {
 		return (T[])getExactInstances0(exactType, tagSerial.incrementAndGet(), maxInstances);		
 	}
 	
-	protected <T> Queue<T> queueInstancesOf(final Class<T> exactType, final int maxInstances) {
+	protected <T> Queue<T> queueInstancesOf(final Class<T> exactType, final int queueSize) {
 		if(exactType==null) throw new IllegalArgumentException("The passed class was null");		
 		if(!isConcrete(exactType)) return (Queue<T>)EMPTY_QUEUE;
-		final SpscGrowableArrayQueue<Object> queue = new SpscGrowableArrayQueue<Object>(nextPowerOf2(maxInstances + 1));
+		final SpscGrowableArrayQueue<Object> queue = new SpscGrowableArrayQueue<Object>(128);
 		threadPool.submit(new Runnable(){
 			public void run() {
-				queueExactInstances0(exactType, tagSerial.incrementAndGet(), maxInstances, queue);
+				queueExactInstances0(exactType, tagSerial.incrementAndGet(), queueSize, queue);
 			}
 		});		
 		return (Queue<T>)queue;		

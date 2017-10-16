@@ -12,6 +12,7 @@
 // see <http://www.gnu.org/licenses/>.
 package com.heliosapm.jvmti.install;
 
+import java.io.IOException;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.Method;
@@ -22,6 +23,18 @@ import java.util.Set;
 
 import javax.management.ObjectName;
 import javax.management.loading.PrivateMLet;
+
+import org.pmw.tinylog.Configurator;
+import org.pmw.tinylog.Logger;
+import org.w3c.dom.Node;
+
+import com.heliosapm.jvmti.extension.ExecutionScheduler;
+import com.heliosapm.utils.collections.Props;
+import com.heliosapm.utils.concurrency.ExtendedThreadManager;
+import com.heliosapm.utils.jmx.JMXHelper;
+import com.heliosapm.utils.lang.StringHelper;
+import com.heliosapm.utils.url.URLHelper;
+import com.heliosapm.utils.xml.XMLHelper;
 
 /**
  * <p>Title: JavaAgent2</p>
@@ -41,6 +54,14 @@ public class JavaAgent2 {
 	public static final String MLET_OBJECT_NAME = "com.heliosapm.jvmti.agent:service=ClassLoader";
 	/** The class name of the native agent */
 	public static final String AGENT_CLASS_NAME = "com.heliosapm.jvmti.agent.Agent";
+	
+	/** The agent arg (location of xml config) */
+	private static String xmlConfig = "defaultconfig.xml";
+	/** The xml config URL */
+	private static URL xmlConfigUrl = null;
+	/** The xml config XML node */
+	private static Node rootConfigNode = null;
+	
 	
 	/**
 	 * The agent bootstrap entry point
@@ -71,7 +92,12 @@ public class JavaAgent2 {
 					try {
 						Thread.currentThread().join(500);  // TODO: make this configurable
 						method.invoke(null);
-						System.err.println("OK: Native Agent Installed");
+						System.err.println("OK: Native Agent Installed. Configuring...");
+						xmlConfigUrl = URLHelper.toURL(xmlConfig);
+						Logger.info("XML Config: [{}]", xmlConfigUrl);
+						rootConfigNode = XMLHelper.parseXML(xmlConfigUrl).getDocumentElement();
+						Logger.debug("First Child Node: [{}]", XMLHelper.renderNode(rootConfigNode));		
+						configure();
 					} catch (Throwable ex) {
 						System.err.println("Failed to load native agent. Stack trace follows:");
 						ex.printStackTrace(System.err);
@@ -88,6 +114,73 @@ public class JavaAgent2 {
 		}
 		
 	}
+	
+	protected static void configure() throws Exception {
+		if(XMLHelper.hasChildNodeByName(rootConfigNode, "logging")) {
+			sysPropsConfig();
+			externalLoggingConfig();
+			extensionsConfig();
+			jmxmpConfig();
+			extendedThreadManagerConfig();
+		}
+	}
+	
+	private static void extendedThreadManagerConfig() {
+		if(XMLHelper.getChildNodeByName(rootConfigNode, "extendedtm") != null) {
+			ExtendedThreadManager.install();
+		}
+	}
+	
+	private static void sysPropsConfig() {
+		Node node = XMLHelper.getChildNodeByName(rootConfigNode, "sysprops");
+		if(node!=null) {
+			Properties p = Props.strToProps(
+					StringHelper.resolveTokens(
+							XMLHelper.getNodeTextValue(node)
+					)
+			);			
+			Props.setSystem(p);
+		}
+	}
+	
+	private static void externalLoggingConfig() {
+		Node node = XMLHelper.getChildNodeByName(rootConfigNode, "logging");
+		String externalConfig = XMLHelper.getAttributeByName(node, "config", null);
+		if(externalConfig != null) {
+			externalConfig = StringHelper.resolveTokens(externalConfig);
+		}
+		if(URLHelper.resolves(URLHelper.toURL(externalConfig))) {
+			try {
+				URL configUrl = URLHelper.toURL(externalConfig);
+				Configurator.fromURL(configUrl);
+				Logger.info("Configured logging from external url: [{}]", configUrl);
+			} catch (IOException iex) {
+				Logger.warn("Failed to configure logging from external: [{}]", externalConfig, iex);
+			}
+		}
+	}	
+	
+	private static void extensionsConfig() {
+		Node node = XMLHelper.getChildNodeByName(rootConfigNode, "extensions");
+		for(Node xnode : XMLHelper.getChildNodesByName(node, "extension", false)) {
+			String className = XMLHelper.getNodeTextValue(xnode);
+			ExecutionScheduler.getInstance().schedule(className);
+		}
+	}
+	
+	private static void jmxmpConfig() {
+		Node node = XMLHelper.getChildNodeByName(rootConfigNode, "jmxmp");
+		if(node!=null) {
+			Node portNode = XMLHelper.getChildNodeByName(node, "port");
+			if(portNode!=null) {
+				Node ifaceNode = XMLHelper.getChildNodeByName(node, "iface");
+				String iface = ifaceNode==null ? "127.0.0.1" : StringHelper.resolveTokens(XMLHelper.getNodeTextValue(ifaceNode));
+				int port = Integer.parseInt(StringHelper.resolveTokens(XMLHelper.getNodeTextValue(portNode)));
+				JMXHelper.fireUpJMXMPServer(iface, port);
+			}
+		}
+	}
+	
 	
 	protected static ClassLoader getClassLoader(final Set<URL> classPath) {
 		if(classPath==null) return JavaAgent2.class.getClassLoader();
